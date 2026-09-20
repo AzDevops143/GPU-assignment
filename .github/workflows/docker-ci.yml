@@ -9,7 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-test-and-package:
@@ -22,6 +21,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set lowercase image name for Docker
+        run: |
+          IMAGE_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=${IMAGE_LOWER}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -36,7 +40,7 @@ jobs:
 
       - name: Build Docker image locally
         run: |
-          echo "Building Docker container with CUDA 12.4 and nvcc..."
+          echo "Building Docker container with CUDA 12.6 and multi-GPU arch nvcc..."
           docker build -t gpu-assignment-local:latest .
 
       - name: Verify CUDA executable inside container
@@ -75,6 +79,7 @@ jobs:
           GPU Assignment Pipeline Artifacts Build Summary
           ==========================================================
           Repository  : ${{ github.repository }}
+          Image Name  : ${{ env.IMAGE_NAME }}
           Commit Hash : ${{ github.sha }}
           Branch      : ${{ github.ref_name }}
           Triggered By: ${{ github.actor }}
@@ -85,7 +90,7 @@ jobs:
           Compiler    : nvcc -O3 -std=c++17 Multi-Architecture Fatbin
           ==========================================================
           Included Artifacts:
-          - bin/heat_diffusion_linux_x86_64 (Compiled CUDA binary for T4/sm_75)
+          - bin/heat_diffusion_linux_x86_64 (Compiled CUDA binary)
           - docs/answers.pdf (In-depth solution and learning guide)
           - docs/GPU_Programming_Problems.pdf (Assignment problem sheet)
           - source/ (Full source code, Dockerfile, Makefile, Compose)
@@ -95,19 +100,11 @@ jobs:
           echo "All pipeline artifacts collected successfully:"
           ls -R ./artifacts
 
-      - name: Extract metadata for Registry tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
-
       - name: Push Docker image to GitHub Container Registry
         if: github.event_name != 'pull_request'
         run: |
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Tagging and pushing image to ${IMAGE_TAG}..."
           docker tag gpu-assignment-local:latest $IMAGE_TAG
           docker push $IMAGE_TAG
 
