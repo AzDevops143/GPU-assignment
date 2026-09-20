@@ -1,0 +1,18 @@
+# Build artifacts
+heat_diffusion
+*.o
+*.out
+*.exe
+
+# Simulation outputs
+*.csv
+*.png
+
+# Python / Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# System
+.DS_Store
+Thumbs.db
