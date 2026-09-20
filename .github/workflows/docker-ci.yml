@@ -100,6 +100,14 @@ jobs:
           echo "All pipeline artifacts collected successfully:"
           ls -R ./artifacts
 
+      - name: Upload All Pipeline Artifacts for Download
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-assignment-all-artifacts
+          path: ./artifacts/
+          retention-days: 30
+
       - name: Push Docker image to GitHub Container Registry
         if: github.event_name != 'pull_request'
         run: |
@@ -107,10 +115,3 @@ jobs:
           echo "Tagging and pushing image to ${IMAGE_TAG}..."
           docker tag gpu-assignment-local:latest $IMAGE_TAG
           docker push $IMAGE_TAG
-
-      - name: Upload All Pipeline Artifacts for Download
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-assignment-all-artifacts
-          path: ./artifacts/
-          retention-days: 30
