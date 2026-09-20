@@ -1,4 +1,4 @@
-name: Build, Test, and Publish Docker Image
+name: Build, Test, Publish Docker Image & Export Artifacts
 
 on:
   push:
@@ -12,8 +12,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-test:
-    name: Docker Build and CUDA Verification
+  build-test-and-package:
+    name: Docker Build, CUDA Verify & Artifact Export
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,7 +34,68 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Build Docker image locally
+        run: |
+          echo "Building Docker container with CUDA 12.4 and nvcc..."
+          docker build -t gpu-assignment-local:latest .
+
+      - name: Verify CUDA executable inside container
+        run: |
+          echo "Checking CUDA binary existence inside container..."
+          docker run --rm gpu-assignment-local:latest ls -lh ./heat_diffusion
+
+      - name: Extract and collect pipeline artifacts
+        run: |
+          echo "Creating artifacts directory..."
+          mkdir -p artifacts/bin
+          mkdir -p artifacts/docs
+          mkdir -p artifacts/source
+
+          # 1. Extract compiled CUDA binary from the Docker container
+          CONTAINER_ID=$(docker create gpu-assignment-local:latest)
+          docker cp $CONTAINER_ID:/workspace/heat_diffusion ./artifacts/bin/heat_diffusion_linux_x86_64
+          docker rm $CONTAINER_ID
+          chmod +x ./artifacts/bin/heat_diffusion_linux_x86_64
+
+          # 2. Copy source and scripts
+          cp heat_diffusion.cu ./artifacts/source/
+          cp Makefile ./artifacts/source/
+          cp Dockerfile ./artifacts/source/
+          cp docker-compose.yml ./artifacts/source/
+          [ -f heat_diffusion_cuda.ipynb ] && cp heat_diffusion_cuda.ipynb ./artifacts/source/
+
+          # 3. Copy documentation and PDF answers
+          [ -f answers.pdf ] && cp answers.pdf ./artifacts/docs/
+          [ -f GPU_Programming_Problems.pdf ] && cp GPU_Programming_Problems.pdf ./artifacts/docs/
+          cp README.md ./artifacts/docs/
+
+          # 4. Generate build metadata summary
+          cat <<EOF > ./artifacts/BUILD_METADATA.txt
+          ==========================================================
+          GPU Assignment Pipeline Artifacts Build Summary
+          ==========================================================
+          Repository  : ${{ github.repository }}
+          Commit Hash : ${{ github.sha }}
+          Branch      : ${{ github.ref_name }}
+          Triggered By: ${{ github.actor }}
+          Event       : ${{ github.event_name }}
+          Date (UTC)  : $(date -u)
+          CUDA Base   : nvidia/cuda:12.4.1-devel-ubuntu22.04
+          Target GPU  : Tesla T4 (sm_75) & universal (arch=all)
+          Compiler    : nvcc -O3
+          ==========================================================
+          Included Artifacts:
+          - bin/heat_diffusion_linux_x86_64 (Compiled CUDA binary for T4/sm_75)
+          - docs/answers.pdf (In-depth solution and learning guide)
+          - docs/GPU_Programming_Problems.pdf (Assignment problem sheet)
+          - source/ (Full source code, Dockerfile, Makefile, Compose)
+          ==========================================================
+          EOF
+
+          echo "All pipeline artifacts collected successfully:"
+          ls -R ./artifacts
+
+      - name: Extract metadata for Registry tags
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -43,19 +104,16 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Verify CUDA executable inside built container
+      - name: Push Docker image to GitHub Container Registry
+        if: github.event_name != 'pull_request'
         run: |
-          echo "Verifying that CUDA executable was compiled properly..."
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ./heat_diffusion || true
-          echo "Container build and CUDA compilation verified successfully!"
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          docker tag gpu-assignment-local:latest $IMAGE_TAG
+          docker push $IMAGE_TAG
+
+      - name: Upload All Pipeline Artifacts for Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-assignment-all-artifacts
+          path: ./artifacts/
+          retention-days: 30

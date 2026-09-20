@@ -40,7 +40,13 @@ The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/dock
 
 1. **Automated Docker Build:** Builds the Docker image from `Dockerfile` with full CUDA 12.4 toolkit support.
 2. **CUDA Compilation Verification:** Runs `nvcc -O3 -arch=all heat_diffusion.cu` inside the container to ensure zero compilation or syntax errors.
-3. **Container Registry Publishing:** Automatically logs in to **GitHub Container Registry (GHCR)** using `${{ secrets.GITHUB_TOKEN }}` and publishes the tagged image:
+3. **Downloadable Pipeline Artifacts:** Automatically extracts and packages all build outputs into a downloadable ZIP archive (`gpu-assignment-all-artifacts.zip`) under the **Artifacts** section of the Actions run:
+   - `bin/heat_diffusion_linux_x86_64`: The compiled Linux CUDA binary ready to execute on any machine with an NVIDIA GPU (e.g. Tesla T4).
+   - `docs/answers.pdf`: The complete 11-page pedagogical solution and architecture guide.
+   - `docs/GPU_Programming_Problems.pdf`: The original assignment problem set.
+   - `source/`: All source code, Dockerfile, Makefile, and notebooks.
+   - `BUILD_METADATA.txt`: Commit hash, compiler flags, and build timestamp.
+4. **Container Registry Publishing:** Automatically logs in to **GitHub Container Registry (GHCR)** using `${{ secrets.GITHUB_TOKEN }}` and publishes the tagged image:
    ```bash
    docker pull ghcr.io/azdevops143/gpu-assignment:latest
    ```
