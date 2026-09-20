@@ -1,6 +1,6 @@
 # GPU-assignment: 2D Heat Diffusion with CUDA & Docker
-#G25AIT2026_Peteti Charan Tej.
-#A submission to **Binod Sir**.
+# G25AIT2026_Peteti Charan Tej.
+# A submission to **Binod Sir**.
 
 Containerized CUDA application and automated CI/CD pipeline using **Docker** and **GitHub Actions**.
 
