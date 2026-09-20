@@ -12,7 +12,7 @@ env:
 
 jobs:
   build-test-and-package:
-    name: Docker Build, CUDA Verify & Artifact Export
+    name: Docker Build, CUDA Verify & Artifact Export (Points 1 to 4)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,6 +26,16 @@ jobs:
         run: |
           IMAGE_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "IMAGE_NAME=${IMAGE_LOWER}" >> $GITHUB_ENV
+
+      - name: Set up Python for Artifact Generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies for Artifacts
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas matplotlib openpyxl
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -48,63 +58,25 @@ jobs:
           echo "Checking CUDA binary existence inside container..."
           docker run --rm gpu-assignment-local:latest ls -lh ./heat_diffusion
 
-      - name: Extract and collect pipeline artifacts
+      - name: Generate Complete Artifacts (Points 1 to 4)
         run: |
-          echo "Creating artifacts directory..."
-          mkdir -p artifacts/bin
-          mkdir -p artifacts/docs
-          mkdir -p artifacts/source
+          echo "Generating Plots, Excel, CSVs, and Document Artifacts..."
+          python generate_artifacts.py
 
-          # 1. Extract compiled CUDA binary from the Docker container
+          # Extract compiled CUDA binary from Docker container into Point 4
           CONTAINER_ID=$(docker create gpu-assignment-local:latest)
-          docker cp $CONTAINER_ID:/workspace/heat_diffusion ./artifacts/bin/heat_diffusion_linux_x86_64
+          docker cp $CONTAINER_ID:/workspace/heat_diffusion ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
           docker rm $CONTAINER_ID
-          chmod +x ./artifacts/bin/heat_diffusion_linux_x86_64
+          chmod +x ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
 
-          # 2. Copy source and scripts
-          cp heat_diffusion.cu ./artifacts/source/
-          cp Makefile ./artifacts/source/
-          cp Dockerfile ./artifacts/source/
-          cp docker-compose.yml ./artifacts/source/
-          [ -f heat_diffusion_cuda.ipynb ] && cp heat_diffusion_cuda.ipynb ./artifacts/source/
-
-          # 3. Copy documentation and PDF answers
-          [ -f answers.pdf ] && cp answers.pdf ./artifacts/docs/
-          [ -f GPU_Programming_Problems.pdf ] && cp GPU_Programming_Problems.pdf ./artifacts/docs/
-          cp README.md ./artifacts/docs/
-
-          # 4. Generate build metadata summary
-          cat <<EOF > ./artifacts/BUILD_METADATA.txt
-          ==========================================================
-          GPU Assignment Pipeline Artifacts Build Summary
-          ==========================================================
-          Repository  : ${{ github.repository }}
-          Image Name  : ${{ env.IMAGE_NAME }}
-          Commit Hash : ${{ github.sha }}
-          Branch      : ${{ github.ref_name }}
-          Triggered By: ${{ github.actor }}
-          Event       : ${{ github.event_name }}
-          Date (UTC)  : $(date -u)
-          CUDA Base   : nvidia/cuda:12.6.2-devel-ubuntu22.04
-          Target GPUs : Hopper H100/H200 (sm_90), Ada RTX 4090/L4 (sm_89), Ampere A100 (sm_80/86), Turing T4 (sm_75), Blackwell-ready PTX (compute_90)
-          Compiler    : nvcc -O3 -std=c++17 Multi-Architecture Fatbin
-          ==========================================================
-          Included Artifacts:
-          - bin/heat_diffusion_linux_x86_64 (Compiled CUDA binary)
-          - docs/answers.pdf (In-depth solution and learning guide)
-          - docs/GPU_Programming_Problems.pdf (Assignment problem sheet)
-          - source/ (Full source code, Dockerfile, Makefile, Compose)
-          ==========================================================
-          EOF
-
-          echo "All pipeline artifacts collected successfully:"
+          echo "Listing all generated pipeline artifacts:"
           ls -R ./artifacts
 
-      - name: Upload All Pipeline Artifacts for Download
+      - name: Upload All Pipeline Artifacts for Download (Points 1 to 4)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gpu-assignment-all-artifacts
+          name: gpu-assignment-complete-artifacts
           path: ./artifacts/
           retention-days: 30
 

@@ -4,9 +4,12 @@ heat_diffusion
 *.out
 *.exe
 
-# Simulation outputs
-*.csv
-*.png
+# Simulation outputs (ignore root level temp outputs)
+/*.csv
+/*.png
+
+# Allow artifacts directory
+!artifacts/**
 
 # Python / Jupyter
 __pycache__/
