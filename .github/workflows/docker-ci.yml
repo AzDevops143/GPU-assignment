@@ -80,9 +80,9 @@ jobs:
           Triggered By: ${{ github.actor }}
           Event       : ${{ github.event_name }}
           Date (UTC)  : $(date -u)
-          CUDA Base   : nvidia/cuda:12.4.1-devel-ubuntu22.04
-          Target GPU  : Tesla T4 (sm_75) & universal (arch=all)
-          Compiler    : nvcc -O3
+          CUDA Base   : nvidia/cuda:12.6.2-devel-ubuntu22.04
+          Target GPUs : Hopper H100/H200 (sm_90), Ada RTX 4090/L4 (sm_89), Ampere A100 (sm_80/86), Turing T4 (sm_75), Blackwell-ready PTX (compute_90)
+          Compiler    : nvcc -O3 -std=c++17 Multi-Architecture Fatbin
           ==========================================================
           Included Artifacts:
           - bin/heat_diffusion_linux_x86_64 (Compiled CUDA binary for T4/sm_75)

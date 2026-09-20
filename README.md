@@ -11,7 +11,17 @@ This repository implements the 2D Heat Diffusion 5-point Jacobi stencil in CUDA 
 - **Shared Memory Tiled Implementation**
 - In-kernel convergence detection using atomic reductions without intermediate CPU-GPU grid copies.
 
-The project is fully containerized using an official NVIDIA CUDA development base image (`nvidia/cuda:12.4.1-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions.
+The project is fully containerized using the latest official NVIDIA CUDA development base image (`nvidia/cuda:12.6.2-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions with multi-architecture compilation.
+
+### ⚡ Supported NVIDIA GPU Architectures
+The compiled binary and container image natively target all modern & latest NVIDIA GPUs:
+| Architecture | Compute Capability | Example GPUs |
+| :--- | :---: | :--- |
+| **Hopper** | `sm_90` | **NVIDIA H100, H200, GH200 Grace Hopper** |
+| **Ada Lovelace** | `sm_89` | **NVIDIA RTX 4090, RTX 4080, L40S, L4** |
+| **Ampere** | `sm_80`, `sm_86` | **NVIDIA A100, A30, RTX 3090, RTX 3080** |
+| **Turing** | `sm_75` | **NVIDIA Tesla T4, RTX 2080** |
+| **Blackwell (PTX)** | `compute_90` | **NVIDIA B100, B200, GB200, RTX 50-series** |
 
 ---
 
