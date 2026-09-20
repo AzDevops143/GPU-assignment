@@ -1,0 +1,17 @@
+FROM nvcr.io/nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
+
+WORKDIR /app
+COPY heat_diffusion.cu .
+
+# Target compute capabilities (sm_75 for T4, sm_80 for A100, sm_89 for L4/RTX4090, sm_90 for H100)
+RUN nvcc -O3 -std=c++17 \
+    -gencode arch=compute_75,code=sm_75 \
+    -gencode arch=compute_80,code=sm_80 \
+    -gencode arch=compute_90,code=sm_90 \
+    heat_diffusion.cu -o heat_diffusion
+
+FROM nvcr.io/nvidia/cuda:12.4.1-runtime-ubuntu22.04
+WORKDIR /app
+COPY --from=builder /app/heat_diffusion .
+
+ENTRYPOINT ["./heat_diffusion"]
