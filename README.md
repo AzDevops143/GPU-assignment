@@ -6,7 +6,7 @@ Containerized CUDA application and automated CI/CD pipeline using **Docker** and
 
 ---
 
-## 🚀 Overview
+##  Overview
 
 This repository implements the 2D Heat Diffusion 5-point Jacobi stencil in CUDA C++ comparing:
 - **Global Memory Implementation**
@@ -15,7 +15,7 @@ This repository implements the 2D Heat Diffusion 5-point Jacobi stencil in CUDA 
 
 The project is fully containerized using the latest official NVIDIA CUDA development base image (`nvidia/cuda:12.6.2-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions with multi-architecture compilation.
 
-### ⚡ Supported NVIDIA GPU Architectures
+###  Supported NVIDIA GPU Architectures
 The compiled binary and container image natively target all modern & latest NVIDIA GPUs:
 | Architecture | Compute Capability | Example GPUs |
 | :--- | :---: | :--- |
@@ -27,7 +27,7 @@ The compiled binary and container image natively target all modern & latest NVID
 
 ---
 
-## 🛠 Project Structure
+## Project Structure
 
 ```text
 docker implement/
@@ -46,7 +46,7 @@ docker implement/
 
 ---
 
-## ⚙️ How GitHub Actions Works
+##  How GitHub Actions Works
 
 The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/docker-ci.yml) triggers on every `push` or `pull_request` to `main`:
 
@@ -80,7 +80,7 @@ The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/dock
 
 ---
 
-## 📦 Local Usage with Docker
+##  Local Usage with Docker
 
 ### 1. Build the Docker Image
 ```bash
@@ -103,7 +103,7 @@ docker compose up
 
 ---
 
-## 📤 Pushing to Your GitHub Repository
+##  Pushing to Your GitHub Repository
 
 To push this repository to `https://github.com/AzDevops143/GPU-assignment.git`:
 
