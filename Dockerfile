@@ -39,7 +39,6 @@ RUN nvcc -O3 -lineinfo -std=c++17 \
     -gencode arch=compute_90,code=sm_90 \
     -gencode arch=compute_100,code=sm_100 \
     -gencode arch=compute_120,code=sm_120 \
-    -gencode arch=compute_100,code=compute_100 \
     heat_diffusion.cu -o heat_diffusion
 
 CMD ["./heat_diffusion", "256", "1e-4", "2000000"]
