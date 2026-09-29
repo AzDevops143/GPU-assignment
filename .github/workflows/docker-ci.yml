@@ -63,7 +63,6 @@ jobs:
           echo "Generating Plots, Excel, CSVs, and Document Artifacts..."
           python generate_artifacts.py
 
-          # Extract compiled CUDA binary from Docker container into Point 4
           CONTAINER_ID=$(docker create gpu-assignment-local:latest)
           docker cp $CONTAINER_ID:/workspace/heat_diffusion ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
           docker rm $CONTAINER_ID

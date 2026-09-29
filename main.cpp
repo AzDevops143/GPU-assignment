@@ -6,9 +6,8 @@
 #include <cuda_runtime.h>
 
 #define TILE_DIM 16
-#define CHECK_CADENCE 20 // Reduce PCIe traffic: evaluate convergence every 20 iterations
+#define CHECK_CADENCE 20
 
-// Atomic max helper for single-precision floats using CAS
 __device__ __forceinline__ void atomicMaxFloat(float* address, float val) {
     int* address_as_int = (int*)address;
     int old = *address_as_int, assumed;
@@ -19,9 +18,6 @@ __device__ __forceinline__ void atomicMaxFloat(float* address, float val) {
     } while (assumed != old);
 }
 
-// -------------------------------------------------------------
-// 1. GLOBAL MEMORY STENCIL KERNEL
-// -------------------------------------------------------------
 __global__ void heat_diffusion_global_kernel(
     const float* __restrict__ T_old,
     float* __restrict__ T_new,
@@ -29,8 +25,8 @@ __global__ void heat_diffusion_global_kernel(
     int N,
     bool check_convergence)
 {
-    int j = blockIdx.x * blockDim.x + threadIdx.x; // Column
-    int i = blockIdx.y * blockDim.y + threadIdx.y; // Row
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = blockIdx.y * blockDim.y + threadIdx.y;
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
     __shared__ float s_max[TILE_DIM * TILE_DIM];
@@ -51,7 +47,6 @@ __global__ void heat_diffusion_global_kernel(
         }
     }
 
-    // In-block tree reduction for max difference
     if (check_convergence) {
         __syncthreads();
         for (int s = (TILE_DIM * TILE_DIM) / 2; s > 0; s >>= 1) {
@@ -66,9 +61,6 @@ __global__ void heat_diffusion_global_kernel(
     }
 }
 
-// -------------------------------------------------------------
-// 2. SHARED-MEMORY TILED STENCIL KERNEL (WITH HALO CELLS)
-// -------------------------------------------------------------
 __global__ void heat_diffusion_shared_kernel(
     const float* __restrict__ T_old,
     float* __restrict__ T_new,
@@ -90,14 +82,12 @@ __global__ void heat_diffusion_shared_kernel(
     int sm_x = tx + 1;
     int sm_y = ty + 1;
 
-    // Load primary cell into tile
     if (i < N && j < N) {
         s_T[sm_y][sm_x] = T_old[i * N + j];
     } else {
         s_T[sm_y][sm_x] = 0.0f;
     }
 
-    // Collaborative halo loading
     if (ty == 0) {
         s_T[0][sm_x] = (i > 0 && j < N) ? T_old[(i - 1) * N + j] : 0.0f;
     }
@@ -113,7 +103,6 @@ __global__ void heat_diffusion_shared_kernel(
 
     __syncthreads();
 
-    // Compute interior cells only
     if (i > 0 && i < N - 1 && j > 0 && j < N - 1) {
         float updated = 0.25f * (s_T[sm_y - 1][sm_x] + 
                                  s_T[sm_y + 1][sm_x] + 
@@ -127,7 +116,6 @@ __global__ void heat_diffusion_shared_kernel(
         }
     }
 
-    // In-block tree reduction
     if (check_convergence) {
         __syncthreads();
         for (int s = (TILE_DIM * TILE_DIM) / 2; s > 0; s >>= 1) {
@@ -142,9 +130,6 @@ __global__ void heat_diffusion_shared_kernel(
     }
 }
 
-// -------------------------------------------------------------
-// DRIVER RUNNER FUNCTION
-// -------------------------------------------------------------
 void run_simulation(
     const std::vector<float>& initial_grid, 
     int N, 
@@ -222,20 +207,19 @@ int main() {
     const int N = 512;
     const float epsilon = 1e-4f;
 
-    // Initialize grid with 0 C interior and fixed boundaries
     std::vector<float> grid(N * N, 0.0f);
     for (int j = 0; j < N; j++) {
-        grid[0 * N + j] = 100.0f;       // Top edge = 100 C
-        grid[(N - 1) * N + j] = 0.0f;   // Bottom edge = 0 C
+        grid[0 * N + j] = 100.0f;
+        grid[(N - 1) * N + j] = 0.0f;
     }
     for (int i = 0; i < N; i++) {
-        grid[i * N + 0] = 50.0f;         // Left edge = 50 C
-        grid[i * N + (N - 1)] = 50.0f;   // Right edge = 50 C
+        grid[i * N + 0] = 50.0f;
+        grid[i * N + (N - 1)] = 50.0f;
     }
 
     std::cout << "Starting 2D Heat Diffusion Benchmark (Grid: " << N << "x" << N << ")..." << std::endl;
-    run_simulation(grid, N, epsilon, false); // Global memory
-    run_simulation(grid, N, epsilon, true);  // Shared memory tiled
+    run_simulation(grid, N, epsilon, false);
+    run_simulation(grid, N, epsilon, true);
 
     return 0;
 }

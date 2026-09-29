@@ -1,15 +1,6 @@
-#!/usr/bin/env python3
-"""
-generate_artifacts.py
-Generates all artifacts for Points 1 to 4:
-1. High-resolution PNG plots (execution_time.png, speedup.png, iterations.png, temperature_field.png)
-2. Comprehensive Excel workbook (heat_diffusion_results.xlsx)
-3. 2D grid temperature CSV datasets (grid_global_*.csv, grid_shared_*.csv)
-4. Copies and verifies source code, compiled binaries, and PDF documents into artifacts folder.
-"""
-
 import os
 import sys
+import shutil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -28,9 +19,6 @@ def main():
     print("Generating Pipeline Artifacts (Points 1 to 4)")
     print("==================================================")
 
-    # -------------------------------------------------------------
-    # Point 2: Excel Benchmark Data Preparation
-    # -------------------------------------------------------------
     print("-> Creating Point 2: heat_diffusion_results.xlsx...")
     raw_data = [
         {"N": 128, "mode": "global", "iterations": 18578, "time_ms": 373.505554, "converged": True, "final_max_diff": 9.918213e-05},
@@ -69,12 +57,8 @@ def main():
         df_correctness.to_excel(writer, sheet_name="correctness", index=False)
     print(f"   Saved {excel_path}")
 
-    # -------------------------------------------------------------
-    # Point 1: High-Resolution Analysis Plots
-    # -------------------------------------------------------------
     print("-> Creating Point 1: High-Resolution PNG Plots...")
 
-    # 1. Execution time comparison
     plt.figure(figsize=(7, 5))
     plt.plot(df_summary["N"], df_summary["time_ms_global"], marker="o", linewidth=2, color="#1f77b4", label="Global memory")
     plt.plot(df_summary["N"], df_summary["time_ms_shared"], marker="s", linewidth=2, color="#ff7f0e", label="Shared memory tiled")
@@ -88,7 +72,6 @@ def main():
     plt.close()
     print(f"   Saved {p1}")
 
-    # 2. Speedup comparison
     plt.figure(figsize=(7, 5))
     plt.plot(df_summary["N"], df_summary["speedup_shared_over_global"], marker="o", linewidth=2, color="#2ca02c", label="Shared vs Global")
     plt.axhline(1.0, color="gray", linestyle="--", label="Baseline (1.0x)")
@@ -102,7 +85,6 @@ def main():
     plt.close()
     print(f"   Saved {p2}")
 
-    # 3. Iterations to convergence
     plt.figure(figsize=(7, 5))
     plt.plot(df_summary["N"], df_summary["iterations_global"], marker="o", linewidth=2, color="#9467bd", label="Iterations to tolerance")
     plt.xlabel("Grid size N", fontsize=12)
@@ -115,31 +97,26 @@ def main():
     plt.close()
     print(f"   Saved {p3}")
 
-    # 4. 2D Steady-State Temperature Field Heatmap
     viz_N = 256
     x = np.linspace(0, 1, viz_N)
     y = np.linspace(0, 1, viz_N)
     X, Y = np.meshgrid(x, y)
-    # Analytical steady-state solution of Laplace eq with Dirichlet boundaries:
-    # Top=100, Bottom=0, Left=75, Right=50
     T_field = np.zeros((viz_N, viz_N), dtype=np.float32)
-    # Fourier series expansion for Laplace equation
     for n in range(1, 40, 2):
         term_top = (4 * 100.0 / (n * np.pi)) * (np.sin(n * np.pi * X) * np.sinh(n * np.pi * Y)) / np.sinh(n * np.pi)
         term_left = (4 * 75.0 / (n * np.pi)) * (np.sin(n * np.pi * (1 - Y)) * np.sinh(n * np.pi * (1 - X))) / np.sinh(n * np.pi)
         term_right = (4 * 50.0 / (n * np.pi)) * (np.sin(n * np.pi * (1 - Y)) * np.sinh(n * np.pi * X)) / np.sinh(n * np.pi)
         T_field += term_top + term_left + term_right
     
-    # Set explicit Dirichlet boundary values
-    T_field[0, :] = 100.0   # Top
-    T_field[-1, :] = 0.0    # Bottom
-    T_field[:, 0] = 75.0    # Left
-    T_field[:, -1] = 50.0   # Right
+    T_field[0, :] = 100.0
+    T_field[-1, :] = 0.0
+    T_field[:, 0] = 75.0
+    T_field[:, -1] = 50.0
 
     plt.figure(figsize=(8, 6))
     contour = plt.contourf(X, Y, T_field, levels=50, cmap="inferno")
     cbar = plt.colorbar(contour)
-    cbar.set_label("Temperature (°C)", fontsize=12)
+    cbar.set_label("Temperature (C)", fontsize=12)
     plt.title(f"2D Steady-State Temperature Field (N = {viz_N}x{viz_N})", fontsize=14, fontweight="bold")
     plt.xlabel("X (Width)", fontsize=12)
     plt.ylabel("Y (Height)", fontsize=12)
@@ -148,12 +125,8 @@ def main():
     plt.close()
     print(f"   Saved {p4}")
 
-    # -------------------------------------------------------------
-    # Point 3: 2D Grid Temperature CSV Datasets
-    # -------------------------------------------------------------
     print("-> Creating Point 3: Temperature Grid CSV Files...")
     for N in [128, 256, 512, 1024]:
-        # Generate grid with proper Dirichlet boundaries
         x_n = np.linspace(0, 1, N)
         y_n = np.linspace(0, 1, N)
         X_n, Y_n = np.meshgrid(x_n, y_n)
@@ -174,11 +147,7 @@ def main():
         np.savetxt(f_shar, grid_n, fmt="%.6f", delimiter=",")
         print(f"   Saved {f_glob} and {f_shar}")
 
-    # -------------------------------------------------------------
-    # Point 4: Source, Executables, and Documentation Copies
-    # -------------------------------------------------------------
     print("-> Creating Point 4: Source Code, Executable & Documentation Artifacts...")
-    import shutil
     files_to_copy = [
         ("heat_diffusion.cu", bin_docs_dir),
         ("answers.pdf", bin_docs_dir),
@@ -194,7 +163,6 @@ def main():
             shutil.copy2(src_file, dst_folder)
             print(f"   Copied {src_file} -> {dst_folder}")
 
-    # Generate complete index summary
     summary_path = os.path.join(out_dir, "ARTIFACTS_MANIFEST.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("==================================================================\n")

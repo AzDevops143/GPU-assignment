@@ -1,21 +1,16 @@
-# Build artifacts
 heat_diffusion
 *.o
 *.out
 *.exe
 
-# Simulation outputs (ignore root level temp outputs)
 /*.csv
 /*.png
 
-# Allow artifacts directory
 !artifacts/**
 
-# Python / Jupyter
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
-# System
 .DS_Store
 Thumbs.db

@@ -1,4 +1,3 @@
-# CUDA Compiler and Multi-Architecture Flags for Modern NVIDIA GPUs
 NVCC := nvcc
 NVCC_FLAGS := -O3 -std=c++17 \
     -gencode arch=compute_75,code=sm_75 \
@@ -8,11 +7,9 @@ NVCC_FLAGS := -O3 -std=c++17 \
     -gencode arch=compute_90,code=sm_90 \
     -gencode arch=compute_90,code=compute_90
 
-# Target binary name
 TARGET := heat_diffusion
 SRC := heat_diffusion.cu
 
-# Docker configuration
 IMAGE_NAME := gpu-assignment
 TAG := latest
 
