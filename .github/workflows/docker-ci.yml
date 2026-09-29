@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY: ghcr.io
   NGC_REGISTRY: nvcr.io
-  NGC_ORG: 1060059671547516
+  NGC_ORG: '1060059671547516'
   NGC_IMAGE_NAME: charantejgpu
 
 jobs:
