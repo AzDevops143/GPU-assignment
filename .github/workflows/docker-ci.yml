@@ -9,6 +9,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  NGC_REGISTRY: nvcr.io
+  NGC_ORG: "1060059671547516"
+  NGC_IMAGE_NAME: "charantejgpu"
 
 jobs:
   build-test-and-package:
@@ -48,10 +51,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to NVIDIA NGC Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.NGC_REGISTRY }}
+          username: '$oauthtoken'
+          password: ${{ secrets.NGC_API_KEY }}
+
       - name: Build Docker image locally
         run: |
           echo "Building Docker container with CUDA 12.8, Nsight Systems and multi-GPU arch nvcc..."
-          docker build -t gpu-assignment-local:latest .
+          docker build --platform linux/amd64 -t gpu-assignment-local:latest .
 
       - name: Verify CUDA executable inside container
         run: |
@@ -107,3 +118,11 @@ jobs:
           echo "Tagging and pushing image to ${IMAGE_TAG}..."
           docker tag gpu-assignment-local:latest $IMAGE_TAG
           docker push $IMAGE_TAG
+
+      - name: Push Docker image to NVIDIA NGC Registry
+        if: github.event_name != 'pull_request'
+        run: |
+          NGC_IMAGE_TAG="${{ env.NGC_REGISTRY }}/${{ env.NGC_ORG }}/${{ env.NGC_IMAGE_NAME }}:latest"
+          echo "Tagging and pushing image to ${NGC_IMAGE_TAG}..."
+          docker tag gpu-assignment-local:latest $NGC_IMAGE_TAG
+          docker push $NGC_IMAGE_TAG
