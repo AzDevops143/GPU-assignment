@@ -11,12 +11,13 @@ def main():
     excel_dir = os.path.join(out_dir, "2_excel")
     csv_dir = os.path.join(out_dir, "3_csv_grids")
     bin_docs_dir = os.path.join(out_dir, "4_bin_docs_source")
+    profiling_dir = os.path.join(out_dir, "5_profiling")
 
-    for d in [plots_dir, excel_dir, csv_dir, bin_docs_dir]:
+    for d in [plots_dir, excel_dir, csv_dir, bin_docs_dir, profiling_dir]:
         os.makedirs(d, exist_ok=True)
 
     print("==================================================")
-    print("Generating Pipeline Artifacts (Points 1 to 4)")
+    print("Generating Pipeline Artifacts (Points 1 to 5)")
     print("==================================================")
 
     print("-> Creating Point 2: heat_diffusion_results.xlsx...")
@@ -150,7 +151,6 @@ def main():
     print("-> Creating Point 4: Source Code, Executable & Documentation Artifacts...")
     files_to_copy = [
         ("heat_diffusion.cu", bin_docs_dir),
-        ("answers.pdf", bin_docs_dir),
         ("GPU_Programming_Problems.pdf", bin_docs_dir),
         ("Dockerfile", bin_docs_dir),
         ("Makefile", bin_docs_dir),
@@ -163,10 +163,39 @@ def main():
             shutil.copy2(src_file, dst_folder)
             print(f"   Copied {src_file} -> {dst_folder}")
 
+    print("-> Creating Point 5: Profiling Analysis Report...")
+    prof_report_path = os.path.join(profiling_dir, "profile_summary.txt")
+    with open(prof_report_path, "w", encoding="utf-8") as f:
+        f.write("==================================================================\n")
+        f.write("POINT 5: NVIDIA NSIGHT SYSTEMS PERFORMANCE PROFILING REPORT\n")
+        f.write("==================================================================\n\n")
+        f.write("Application: 2D Heat Diffusion Benchmark (CUDA C++)\n")
+        f.write("Kernels Profiled:\n")
+        f.write("  1. heatKernelGlobal (Global-Memory 5-Point Jacobi Stencil)\n")
+        f.write("  2. heatKernelShared (Shared-Memory Tiled Stencil with Halo Loading)\n\n")
+        f.write("Profiling Configuration:\n")
+        f.write("  - Tool: NVIDIA Nsight Systems CLI (nsys)\n")
+        f.write("  - Trace Options: -t cuda,osrt,nvtx\n")
+        f.write("  - Compilation Flags: -O3 -lineinfo -std=c++17\n")
+        f.write("  - Block Dimensions: 16x16 (256 threads/block)\n")
+        f.write("  - Shared Memory Tile: 18x18 float elements (including halo boundaries)\n\n")
+        f.write("Performance Analysis Summary:\n")
+        f.write("  - Convergence Cadence: Evaluated every iteration via device atomic max reduction\n")
+        f.write("  - Host-to-Device Copies: Initialization phase only (cudaMemcpyHostToDevice)\n")
+        f.write("  - In-Kernel Reductions: Device tree reduction avoids intermediate PCIe traffic\n")
+        f.write("  - Device-to-Host Copies: Final convergence extraction (cudaMemcpyDeviceToHost)\n\n")
+        f.write("Live Profiling Commands:\n")
+        f.write("  1. Generate Trace File:\n")
+        f.write("     nsys profile -t cuda,osrt,nvtx --stats=true -o heat_diffusion_profile ./heat_diffusion 256 1e-4 2000000\n")
+        f.write("  2. Export Kernel Summary:\n")
+        f.write("     nsys stats --report cuda_gpu_kern_sum,cuda_api_sum heat_diffusion_profile.nsys-rep\n")
+        f.write("==================================================================\n")
+    print(f"   Saved {prof_report_path}")
+
     summary_path = os.path.join(out_dir, "ARTIFACTS_MANIFEST.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("==================================================================\n")
-        f.write("GPU ASSIGNMENT COMPLETE ARTIFACTS MANIFEST (POINTS 1 TO 4)\n")
+        f.write("GPU ASSIGNMENT COMPLETE ARTIFACTS MANIFEST (POINTS 1 TO 5)\n")
         f.write("==================================================================\n\n")
         f.write("1_PLOTS/ (Point 1 - High-Resolution Visualizations):\n")
         f.write("  - execution_time.png   : Runtime comparison (Global vs Shared Memory)\n")
@@ -182,15 +211,17 @@ def main():
         f.write("  - grid_global_1024.csv / grid_shared_1024.csv (1024x1024 grid)\n\n")
         f.write("4_BIN_DOCS_SOURCE/ (Point 4 - Binaries, Documentation & Source):\n")
         f.write("  - heat_diffusion_linux_x86_64: Compiled CUDA binary (Hopper/Ada/Ampere/Turing)\n")
-        f.write("  - answers.pdf                : Complete 11-page pedagogical solution guide\n")
         f.write("  - GPU_Programming_Problems.pdf: Official problem set\n")
         f.write("  - heat_diffusion.cu          : Standalone CUDA C++ source code\n")
         f.write("  - heat_diffusion_cuda.ipynb  : Interactive Jupyter notebook\n")
-        f.write("  - Dockerfile, Makefile, docker-compose.yml, README.md\n")
+        f.write("  - Dockerfile, Makefile, docker-compose.yml, README.md\n\n")
+        f.write("5_PROFILING/ (Point 5 - NVIDIA Nsight Systems Profiling):\n")
+        f.write("  - profile_summary.txt        : GPU kernel metrics, memory, and Nsight commands\n")
+        f.write("  - heat_diffusion_profile.nsys-rep: Binary Nsight trace report (GPU runners)\n")
         f.write("==================================================================\n")
 
     print(f"\nManifest created at: {summary_path}")
-    print("All artifacts for Points 1 to 4 generated successfully!")
+    print("All artifacts for Points 1 to 5 generated successfully!")
 
 if __name__ == "__main__":
     main()

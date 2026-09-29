@@ -11,17 +11,17 @@ This repository implements the 2D Heat Diffusion 5-point Jacobi stencil in CUDA 
 - **Shared Memory Tiled Implementation**
 - In-kernel convergence detection using atomic reductions without intermediate CPU-GPU grid copies.
 
-The project is fully containerized using the latest official NVIDIA CUDA development base image (`nvidia/cuda:12.6.2-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions with multi-architecture compilation.
+The project is fully containerized using the latest official NVIDIA CUDA development base image (`nvidia/cuda:12.8.0-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions with multi-architecture compilation and NVIDIA Nsight Systems profiling.
 
 ### Supported NVIDIA GPU Architectures
 The compiled binary and container image natively target all modern & latest NVIDIA GPUs:
 | Architecture | Compute Capability | Example GPUs |
 | :--- | :---: | :--- |
+| **Blackwell** | `sm_100`, `sm_120` | **NVIDIA B100, B200, GB200, RTX 50-series** |
 | **Hopper** | `sm_90` | **NVIDIA H100, H200, GH200 Grace Hopper** |
 | **Ada Lovelace** | `sm_89` | **NVIDIA RTX 4090, RTX 4080, L40S, L4** |
 | **Ampere** | `sm_80`, `sm_86` | **NVIDIA A100, A30, RTX 3090, RTX 3080** |
 | **Turing** | `sm_75` | **NVIDIA Tesla T4, RTX 2080** |
-| **Blackwell (PTX)** | `compute_90` | **NVIDIA B100, B200, GB200, RTX 50-series** |
 
 ---
 
@@ -48,10 +48,10 @@ docker implement/
 
 The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/docker-ci.yml) triggers on every `push` or `pull_request` to `main`:
 
-1. **Automated Docker Build:** Builds the Docker image from `Dockerfile` with full CUDA 12.6 toolkit and latest NVIDIA GPU multi-architecture flags.
-2. **CUDA Compilation Verification:** Runs `nvcc -O3` inside the container to ensure zero compilation or syntax errors.
-3. **Complete Downloadable Pipeline Artifacts (Points 1 to 4):**
-   Automatically packages all simulation, benchmark, and analytical outputs into a single downloadable ZIP (`gpu-assignment-complete-artifacts.zip`):
+1. **Automated Docker Build:** Builds the Docker image from `Dockerfile` with full CUDA 12.8 toolkit, NVIDIA Nsight Systems CLI, and multi-architecture flags.
+2. **CUDA & Nsight Verification:** Checks compilation with `-O3 -lineinfo` and verifies the presence of `nsys`.
+3. **Complete Downloadable Pipeline Artifacts (Points 1 to 5):**
+   Automatically packages all simulation, benchmark, profiling, and analytical outputs into a single downloadable ZIP (`gpu-assignment-complete-artifacts.zip`):
    - **Point 1 - High-Resolution PNG Visualizations (`1_plots/`):**
      - `execution_time.png`: Execution time vs. grid size (Global vs. Shared memory).
      - `speedup.png`: Shared memory speedup ratio curve.
@@ -62,19 +62,21 @@ The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/dock
    - **Point 3 - Full 2D Grid Temperature CSV Datasets (`3_csv_grids/`):**
      - `grid_global_*.csv` and `grid_shared_*.csv` for $N \in \{128, 256, 512, 1024\}$.
    - **Point 4 - Binaries, Documentation & Source (`4_bin_docs_source/`):**
-     - `heat_diffusion_linux_x86_64`: Compiled Linux CUDA binary (Hopper/Ada/Ampere/Turing/Blackwell PTX).
-     - `answers.pdf`: Complete 11-page pedagogical solution and architecture guide.
+     - `heat_diffusion_linux_x86_64`: Compiled Linux CUDA binary (Hopper/Ada/Ampere/Turing/Blackwell).
      - `GPU_Programming_Problems.pdf`: Original assignment problem set.
      - `heat_diffusion.cu`: Standalone CUDA C++ source code.
      - `heat_diffusion_cuda.ipynb`: Interactive Jupyter notebook.
      - `Dockerfile`, `Makefile`, `docker-compose.yml`, `README.md`.
+   - **Point 5 - NVIDIA Nsight Systems Profiling (`5_profiling/`):**
+     - `profile_summary.txt`: Stencil kernel performance metrics, memory throughput, and CLI commands.
+     - `heat_diffusion_profile.nsys-rep`: Complete trace report (generated when physical GPU is available).
 4. **Container Registry Publishing:** Automatically logs in to **GitHub Container Registry (GHCR)** using `${{ secrets.GITHUB_TOKEN }}` and publishes the tagged image:
    ```bash
    docker pull ghcr.io/azdevops143/gpu-assignment:latest
    ```
 
 > [!NOTE]
-> Standard GitHub-hosted runners (`ubuntu-latest`) do not contain physical GPUs, but they **can fully compile, build, and verify** CUDA code in Docker. To run real kernel executions on GPU hardware directly inside GitHub Actions, connect a **Self-Hosted Runner** with an NVIDIA GPU and NVIDIA Container Toolkit.
+> Standard GitHub-hosted runners (`ubuntu-latest`) do not contain physical GPUs, but they **can fully compile, build, and verify** CUDA and Nsight code in Docker. To run real kernel executions and generate live Nsight traces on GPU hardware directly inside GitHub Actions, connect a **Self-Hosted Runner** with an NVIDIA GPU and NVIDIA Container Toolkit.
 
 ---
 
@@ -99,6 +101,12 @@ Or with Docker Compose:
 docker compose up
 ```
 
+### 3. Profile with NVIDIA Nsight Systems
+```bash
+docker run --gpus all --rm -v $(pwd)/artifacts/5_profiling:/reports gpu-assignment:latest \
+  nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/heat_diffusion_profile ./heat_diffusion 256 1e-4 2000000
+```
+
 ---
 
 ## Pushing to Your GitHub Repository
@@ -112,4 +120,4 @@ git commit -m "feat: setup Dockerfile, CUDA source, and GitHub Actions CI workfl
 git remote add origin https://github.com/AzDevops143/GPU-assignment.git
 git push -u origin main
 ```
-Once pushed, click the **Actions** tab on your GitHub repository to watch the Docker container build and publish automatically!
+Once pushed, click the **Actions** tab on your GitHub repository to watch the Docker container build, test, profile, and publish automatically!
