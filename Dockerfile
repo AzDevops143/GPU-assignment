@@ -1,4 +1,5 @@
-FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
+#FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:13.4.1-tensorrt-devel-ubuntu26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
