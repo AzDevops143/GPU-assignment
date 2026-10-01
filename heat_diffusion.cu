@@ -222,8 +222,42 @@ SimResult runSimulation(int N, float tol, long long maxIter, int mode,
     return result;
 }
 
+// Probes for multi-GPU topology and activates direct NVLink P2P access
+void probeAndEnableNvlinkPeerAccess()
+{
+    int deviceCount = 0;
+    cudaError_t err = cudaGetDeviceCount(&deviceCount);
+    if (err != cudaSuccess || deviceCount <= 1) {
+        return; // Single GPU or CPU-only runner
+    }
+
+    printf("==================================================================\n");
+    printf("Multi-GPU System Detected (%d Devices). Querying NVLink P2P Access...\n", deviceCount);
+    for (int i = 0; i < deviceCount; i++) {
+        for (int j = 0; j < deviceCount; j++) {
+            if (i != j) {
+                int canAccess = 0;
+                cudaDeviceCanAccessPeer(&canAccess, i, j);
+                if (canAccess) {
+                    cudaSetDevice(i);
+                    cudaError_t pErr = cudaDeviceEnablePeerAccess(j, 0);
+                    if (pErr == cudaSuccess || pErr == cudaErrorPeerAccessAlreadyEnabled) {
+                        printf("  [NVLink P2P Enabled] GPU %d <-> GPU %d direct access active\n", i, j);
+                    }
+                } else {
+                    printf("  [P2P Unavailable] GPU %d cannot access GPU %d directly\n", i, j);
+                }
+            }
+        }
+    }
+    cudaSetDevice(0);
+    printf("==================================================================\n\n");
+}
+
 int main(int argc, char** argv)
 {
+    probeAndEnableNvlinkPeerAccess();
+
     int N = 256;
     float eps = 1e-4f;
     long long maxIter = 2000000;

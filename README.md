@@ -46,7 +46,36 @@ PDE solving (2D Heat Diffusion Jacobi iteration) is fundamentally **memory-bandw
 ### 3. In-Kernel Convergence via Device Atomics
 Rather than copying the grid back to the host CPU after every iteration to compute the maximum error residual ($\Delta T_{\max}$), both kernels perform **in-kernel thread block tree reduction** and device-level `atomicMax` convergence tracking directly on the GPU. This eliminates unnecessary host-device memory transfers and keeps computation resident in the Blackwell memory subsystem.
 
-### 4. Dedicated Target Architecture: `sm_100`
+### 4. NVLink Transparent Operation & Peer Access Programming Model
+
+NVLink operates transparently within the existing CUDA model:
+- **Automatic Routing:** Transfers between NVLink-connected endpoints are automatically routed through NVLink, rather than PCIe.
+- **Peer Access Activation:** The `cudaDeviceEnablePeerAccess()` API call remains necessary to enable direct transfers (over either PCIe or NVLink) between GPUs.
+- **Topology Probing:** The `cudaDeviceCanAccessPeer()` API call can be used to determine if peer access is possible between any pair of GPUs.
+
+#### CUDA Runtime Implementation Pattern
+```cpp
+// 1. Probe for peer-to-peer access capability over NVLink
+int canAccess = 0;
+cudaDeviceCanAccessPeer(&canAccess, deviceA, deviceB);
+
+if (canAccess) {
+    // 2. Select originating device
+    cudaSetDevice(deviceA);
+
+    // 3. Enable direct zero-copy access to peer device B memory
+    cudaDeviceEnablePeerAccess(deviceB, 0);
+
+    // Memory transfers between endpoints are now automatically routed over NVLink!
+}
+```
+
+#### Dual-Memory Scaling in GB200 NVL
+In the NVIDIA GB200 Grace Blackwell architecture, dual Blackwell GPUs communicate with each other over 5th-Generation NVLink (up to 1.8 TB/s bidirectional bandwidth) and with the Grace CPU over NVLink-C2C (900 GB/s coherent bandwidth):
+- Once peer access is enabled via `cudaDeviceEnablePeerAccess()`, GPU-to-GPU halo boundary exchanges in 2D stencil computations operate with direct peer memory loads and stores without host memory bouncing.
+- The CUDA driver transparently manages cache coherency across NVLink links, providing maximum bandwidth and sub-microsecond synchronization latency.
+
+### 5. Dedicated Target Architecture: `sm_100`
 Compilation in both the container and CI pipeline targets Compute Capability **`sm_100`** natively:
 ```bash
 nvcc -O3 -lineinfo -std=c++17 -gencode arch=compute_100,code=sm_100 heat_diffusion.cu -o heat_diffusion
