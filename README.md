@@ -90,7 +90,42 @@ GPU-assignment/
 | **Memory Redundancy** | High (neighboring threads re-read same points) | Minimal (cooperative loading of $18 \times 18$ tile with halos) |
 | **Convergence Check** | In-kernel parallel reduction + `atomicMax` | In-kernel parallel reduction + `atomicMax` |
 | **Target GPU Architecture** | NVIDIA GB200 Blackwell (`sm_100`) | NVIDIA GB200 Blackwell (`sm_100`) |
-| **Speedup Ratio** | Baseline ($1.0\times$) | **Up to $2.2\times$ faster** depending on grid size $N$ |
+| **Validation Parity** | Bit-exact output ($\max \|T_g - T_s\| = 0.0$) | Bit-exact output ($\max \|T_g - T_s\| = 0.0$) |
+
+---
+
+## Simulation & Benchmark Results
+
+### 1. Numerical Convergence & Performance Data
+
+All benchmark runs evaluate the 2D Heat Diffusion stencil until the convergence threshold $\varepsilon = 10^{-4}$ is reached, subject to fixed Dirichlet boundary conditions (Top = $100^\circ\text{C}$, Bottom = $0^\circ\text{C}$, Left = $75^\circ\text{C}$, Right = $50^\circ\text{C}$):
+
+| Grid Size ($N \times N$) | Total Grid Elements | Iterations to Convergence | Global Memory Time (ms) | Shared Memory Time (ms) | Speedup (Global / Shared) | Max Residual ($\Delta T_{\max}$) | Discrepancy ($\max \|T_g - T_s\|$) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **$128 \times 128$** | 16,384 | 18,578 | **373.51 ms** | 430.63 ms | $0.87\times$ | $9.9182 \times 10^{-5}$ | **$0.000000$ (Bit-Exact)** |
+| **$256 \times 256$** | 65,536 | 57,321 | **1,382.33 ms** | 1,384.51 ms | $1.00\times$ | $9.9182 \times 10^{-5}$ | **$0.000000$ (Bit-Exact)** |
+| **$512 \times 512$** | 262,144 | 155,164 | 5,333.20 ms | **5,324.26 ms** | **$1.002\times$** | $9.9182 \times 10^{-5}$ | **$0.000000$ (Bit-Exact)** |
+| **$1024 \times 1024$** | 1,048,576 | 330,990 | **27,399.35 ms** | 35,031.91 ms | $0.78\times$ | $9.9182 \times 10^{-5}$ | **$0.000000$ (Bit-Exact)** |
+
+### 2. Correctness & Mathematical Validation
+- **Exact Numerical Parity**: Across all grid dimensions ($N = 128, 256, 512, 1024$), the maximum difference between Global Memory and Shared Memory temperature grids is **$\max |T_{\text{global}} - T_{\text{shared}}| = 0.000000$**.
+- **Residual Guarantee**: Both kernels strictly satisfy the convergence bound $\Delta T_{\max} = 9.918213 \times 10^{-5} < 1.0 \times 10^{-4}$ before terminating.
+
+### 3. Simulation Visualizations (Point 1 Artifacts)
+
+The pipeline produces publication-quality analytical plots stored under [`artifacts/1_plots/`](artifacts/1_plots/):
+
+#### Execution Time & Speedup Scaling
+| Execution Time vs. Grid Size | Shared Memory Speedup Ratio |
+| :---: | :---: |
+| ![Execution Time](artifacts/1_plots/execution_time.png) | ![Speedup Ratio](artifacts/1_plots/speedup.png) |
+| *Runtime scaling for Global vs. Shared memory kernels across $N \in \{128, 256, 512, 1024\}$* | *Speedup ratio ($\text{Time}_{\text{global}} / \text{Time}_{\text{shared}}$)* |
+
+#### Convergence Trajectory & Steady-State Heatmap
+| Stencil Iterations to Convergence | Steady-State 2D Temperature Field |
+| :---: | :---: |
+| ![Iterations](artifacts/1_plots/iterations.png) | ![Temperature Field](artifacts/1_plots/temperature_field.png) |
+| *Jacobi iterations required to reach $\varepsilon = 10^{-4}$* | *2D thermal contour heatmap ($N = 256 \times 256$) with Dirichlet boundary conditions* |
 
 ---
 
