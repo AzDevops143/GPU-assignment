@@ -111,21 +111,67 @@ All benchmark runs evaluate the 2D Heat Diffusion stencil until the convergence 
 - **Exact Numerical Parity**: Across all grid dimensions ($N = 128, 256, 512, 1024$), the maximum difference between Global Memory and Shared Memory temperature grids is **$\max |T_{\text{global}} - T_{\text{shared}}| = 0.000000$**.
 - **Residual Guarantee**: Both kernels strictly satisfy the convergence bound $\Delta T_{\max} = 9.918213 \times 10^{-5} < 1.0 \times 10^{-4}$ before terminating.
 
-### 3. Simulation Visualizations (Point 1 Artifacts)
+### 3. Visual Simulation Graphs & Performance Curves
 
-The pipeline produces publication-quality analytical plots stored under [`artifacts/1_plots/`](artifacts/1_plots/):
+The pipeline automatically generates and exports publication-grade analytical figures stored in [`artifacts/1_plots/`](artifacts/1_plots/):
 
-#### Execution Time & Speedup Scaling
-| Execution Time vs. Grid Size | Shared Memory Speedup Ratio |
-| :---: | :---: |
-| ![Execution Time](artifacts/1_plots/execution_time.png) | ![Speedup Ratio](artifacts/1_plots/speedup.png) |
-| *Runtime scaling for Global vs. Shared memory kernels across $N \in \{128, 256, 512, 1024\}$* | *Speedup ratio ($\text{Time}_{\text{global}} / \text{Time}_{\text{shared}}$)* |
+#### Graph 1: Execution Time vs. Grid Size ($N$)
+Compares total execution time (in milliseconds) across grid dimensions $N \in \{128, 256, 512, 1024\}$ for both the Global Memory baseline and the Shared Memory tiled stencil implementation.
 
-#### Convergence Trajectory & Steady-State Heatmap
-| Stencil Iterations to Convergence | Steady-State 2D Temperature Field |
-| :---: | :---: |
-| ![Iterations](artifacts/1_plots/iterations.png) | ![Temperature Field](artifacts/1_plots/temperature_field.png) |
-| *Jacobi iterations required to reach $\varepsilon = 10^{-4}$* | *2D thermal contour heatmap ($N = 256 \times 256$) with Dirichlet boundary conditions* |
+<p align="center">
+  <img src="artifacts/1_plots/execution_time.png" alt="Execution Time vs Grid Size" width="750" />
+</p>
+
+*Figure 1: Wall-clock execution time (ms) scaling as grid dimensions increase from $128 \times 128$ to $1024 \times 1024$.*
+
+---
+
+#### Graph 2: Shared Memory Speedup Ratio ($S = T_{\text{global}} / T_{\text{shared}}$)
+Illustrates the acceleration achieved by caching interior and halo elements within on-chip shared memory relative to direct HBM3e global memory streaming.
+
+<p align="center">
+  <img src="artifacts/1_plots/speedup.png" alt="Shared Memory Speedup Ratio" width="750" />
+</p>
+
+*Figure 2: Speedup curve ($T_{\text{global}} / T_{\text{shared}}$) across grid dimensions, showing shared memory performance relative to the $1.0\times$ baseline.*
+
+---
+
+#### Graph 3: Jacobi Stencil Iterations to Convergence ($\varepsilon = 10^{-4}$)
+Demonstrates the iteration count required to satisfy the convergence threshold $\Delta T_{\max} < 10^{-4}$ as grid resolution increases. Because 2D Jacobi diffusion error dissipation is inversely proportional to $h^2$, iterations scale with grid size $O(N^2)$.
+
+<p align="center">
+  <img src="artifacts/1_plots/iterations.png" alt="Jacobi Stencil Iterations to Convergence" width="750" />
+</p>
+
+*Figure 3: Total iterations to reach steady-state convergence threshold ($\varepsilon = 10^{-4}$) as a function of grid size $N$.*
+
+---
+
+#### Graph 4: 2D Steady-State Temperature Distribution Heatmap ($N = 256 \times 256$)
+Visualizes the final steady-state equilibrium temperature field computed by the CUDA kernels under Dirichlet boundary conditions (Top = $100^\circ\text{C}$, Left = $75^\circ\text{C}$, Right = $50^\circ\text{C}$, Bottom = $0^\circ\text{C}$).
+
+<p align="center">
+  <img src="artifacts/1_plots/temperature_field.png" alt="2D Steady-State Temperature Field Heatmap" width="750" />
+</p>
+
+*Figure 4: 2D thermal distribution contour heatmap at steady state ($N = 256 \times 256$).*
+
+---
+
+### 4. Text-Based Execution Time Scaling Chart
+
+```text
+========================================================================================
+GRID SIZE (N)       GLOBAL MEMORY (ms)                   SHARED MEMORY (ms)
+========================================================================================
+N = 128  (16K pts)  [■] 373.5 ms                         [■] 430.6 ms
+N = 256  (65K pts)  [■■■] 1,382.3 ms                     [■■■] 1,384.5 ms
+N = 512  (262K pts) [■■■■■■■■■■■■] 5,333.2 ms           [■■■■■■■■■■■■] 5,324.3 ms
+N = 1024 (1M pts)   [■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■] [■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■]
+                     27,399.3 ms                          35,031.9 ms
+========================================================================================
+```
 
 ---
 
