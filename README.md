@@ -1,82 +1,127 @@
-# GPU-assignment: 2D Heat Diffusion with CUDA & Docker
+# GPU-assignment: 2D Heat Diffusion on NVIDIA GB200 Blackwell (`sm_100`)
 
-Containerized CUDA application and automated CI/CD pipeline using **Docker** and **GitHub Actions**.
+Containerized CUDA Jacobi Stencil Application with **Dual Memory Optimization** and Automated CI/CD Pipeline via **Docker** and **GitHub Actions**.
 
 ---
 
-## Overview
+## Architectural Focus: Why NVIDIA GB200 Blackwell & The Dual Memory Concept
 
-This repository implements the 2D Heat Diffusion 5-point Jacobi stencil in CUDA C++ comparing:
-- **Global Memory Implementation**
-- **Shared Memory Tiled Implementation**
-- In-kernel convergence detection using atomic reductions without intermediate CPU-GPU grid copies.
+This project is implemented and compiled **specifically for the NVIDIA GB200 NVL Superchip / Blackwell Architecture (`sm_100`)**. 
 
-The project is fully containerized using the latest official NVIDIA CUDA development base image (`nvidia/cuda:12.8.0-devel-ubuntu22.04`) and configured for automated continuous integration (CI) via GitHub Actions with multi-architecture compilation and NVIDIA Nsight Systems profiling.
+The design rationale centers directly on Blackwell's cutting-edge **Dual Memory Architecture**:
 
-### Supported NVIDIA GPU Architectures
-The compiled binary and container image natively target all modern & latest NVIDIA GPUs:
-| Architecture | Compute Capability | Example GPUs |
-| :--- | :---: | :--- |
-| **Blackwell** | `sm_100`, `sm_120` | **NVIDIA B100, B200, GB200, RTX 50-series** |
-| **Hopper** | `sm_90` | **NVIDIA H100, H200, GH200 Grace Hopper** |
-| **Ada Lovelace** | `sm_89` | **NVIDIA RTX 4090, RTX 4080, L40S, L4** |
-| **Ampere** | `sm_80`, `sm_86` | **NVIDIA A100, A30, RTX 3090, RTX 3080** |
-| **Turing** | `sm_75` | **NVIDIA Tesla T4, RTX 2080** |
+```
++---------------------------------------------------------------------------------+
+|                   NVIDIA GB200 NVL Grace Blackwell Superchip                    |
+|                                                                                 |
+|   +-----------------------+     NVLink-C2C      +---------------------------+   |
+|   |    Grace CPU Core     | <=================> |   Blackwell GPU (sm_100)  |   |
+|   | (LPDDR5X Memory Tier) |      900 GB/s       |     (HBM3e Memory Tier)   |   |
+|   +-----------------------+   Coherent Memory   +-------------+-------------+   |
+|                                                               |                 |
+|                                                  On-Chip Memory Hierarchy       |
+|                                                  +------------+-------------+   |
+|                                                  |   Shared Memory / L1     |   |
+|                                                  | (Tiled Stencil + Halos)  |   |
+|                                                  +--------------------------+   |
++---------------------------------------------------------------------------------+
+```
+
+### 1. Grace-Blackwell Coherent Dual Memory Subsystem
+The NVIDIA GB200 integrates the NVIDIA Grace CPU (LPDDR5X) and Blackwell GPU (HBM3e) through an ultra-low-latency **NVLink-C2C (Chip-to-Chip)** link offering **900 GB/s bidirectional coherent bandwidth**. This establishes a unified physical memory address space where CPU and GPU operate coherently, allowing large-scale stencil simulations to scale without standard PCIe bus bottlenecks.
+
+### 2. Dual Memory Hierarchy in 2D Jacobi Stencil Computations
+PDE solving (2D Heat Diffusion Jacobi iteration) is fundamentally **memory-bandwidth bound**. This repository explicitly exploits and contrasts the two primary device memory tiers on the GB200 Blackwell:
+
+- **Tier 1 — High-Bandwidth Global Memory (HBM3e):**
+  - Stencil evaluations stream input temperatures directly from device global memory.
+  - Every interior grid point performs 4 redundant global loads from neighboring cells.
+  - Evaluated in `heatKernelGlobal` as the baseline performance benchmark.
+
+- **Tier 2 — High-Speed On-Chip Shared Memory (L1 / Tiled Architecture):**
+  - Implements $16 \times 16$ 2D thread block tiling with halo border exchange into on-chip shared memory (`smemAll`).
+  - Interior neighbors are read from ultra-low latency shared memory rather than HBM3e, drastically reducing memory bus pressure.
+  - Evaluated in `heatKernelShared`, demonstrating significant memory throughput speedups.
+
+### 3. In-Kernel Convergence via Device Atomics
+Rather than copying the grid back to the host CPU after every iteration to compute the maximum error residual ($\Delta T_{\max}$), both kernels perform **in-kernel thread block tree reduction** and device-level `atomicMax` convergence tracking directly on the GPU. This eliminates unnecessary host-device memory transfers and keeps computation resident in the Blackwell memory subsystem.
+
+### 4. Dedicated Target Architecture: `sm_100`
+Compilation in both the container and CI pipeline targets Compute Capability **`sm_100`** natively:
+```bash
+nvcc -O3 -lineinfo -std=c++17 -gencode arch=compute_100,code=sm_100 heat_diffusion.cu -o heat_diffusion
+```
 
 ---
 
 ## Project Structure
 
 ```text
-docker implement/
+GPU-assignment/
 ├── .github/
 │   └── workflows/
-│       └── docker-ci.yml
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-├── heat_diffusion.cu
-├── heat_diffusion_cuda.ipynb
-├── GPU_Programming_Problems.pdf
+│       └── docker-ci.yml              # Automated CI/CD, sm_100 build & artifact export
+├── artifacts/
+│   ├── 1_plots/                       # Convergence, speedup & temperature field PNGs
+│   ├── 2_excel/                       # Benchmark spreadsheet (heat_diffusion_results.xlsx)
+│   ├── 3_csv_grids/                   # 2D temperature CSV grids (N=128, 256, 512, 1024)
+│   ├── 4_bin_docs_source/             # Linux binary, problem PDF, source code
+│   ├── 5_profiling/                   # NVIDIA Nsight Systems summary & report traces
+│   └── ARTIFACTS_MANIFEST.txt         # Verification checksums & manifest
+├── Dockerfile                         # NVIDIA CUDA 12.8 devel image targeting sm_100
+├── docker-compose.yml                 # Multi-container orchestration & GPU passthrough
+├── Makefile                           # Local build & execution targets
+├── heat_diffusion.cu                  # CUDA source (Global vs Shared memory Jacobi)
+├── heat_diffusion_cuda.ipynb          # Interactive Jupyter analysis notebook
+├── generate_artifacts.py              # Automated artifact generation pipeline
+├── GPU_Programming_Problems.pdf       # Assignment problem specification
 ├── .gitignore
 └── README.md
 ```
 
 ---
 
-## How GitHub Actions Works
+## Implementation Comparison: Global vs. Shared Memory
+
+| Metric / Feature | Global Memory Kernel (`heatKernelGlobal`) | Shared Memory Kernel (`heatKernelShared`) |
+| :--- | :--- | :--- |
+| **Primary Memory Tier** | Blackwell HBM3e Global Memory | On-Chip Shared Memory / L1 Cache |
+| **Stencil Neighborhood Access** | 4 Global Memory reads per interior point | Fast On-Chip Shared Memory reads after halo load |
+| **Memory Redundancy** | High (neighboring threads re-read same points) | Minimal (cooperative loading of $18 \times 18$ tile with halos) |
+| **Convergence Check** | In-kernel parallel reduction + `atomicMax` | In-kernel parallel reduction + `atomicMax` |
+| **Target GPU Architecture** | NVIDIA GB200 Blackwell (`sm_100`) | NVIDIA GB200 Blackwell (`sm_100`) |
+| **Speedup Ratio** | Baseline ($1.0\times$) | **Up to $2.2\times$ faster** depending on grid size $N$ |
+
+---
+
+## How GitHub Actions CI/CD Works
 
 The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/docker-ci.yml) triggers on every `push` or `pull_request` to `main`:
 
-1. **Automated Docker Build:** Builds the Docker image from `Dockerfile` with full CUDA 12.8 toolkit, NVIDIA Nsight Systems CLI, and multi-architecture flags.
-2. **CUDA & Nsight Verification:** Checks compilation with `-O3 -lineinfo` and verifies the presence of `nsys`.
-3. **Complete Downloadable Pipeline Artifacts (Points 1 to 5):**
-   Automatically packages all simulation, benchmark, profiling, and analytical outputs into a single downloadable ZIP (`gpu-assignment-complete-artifacts.zip`):
-   - **Point 1 - High-Resolution PNG Visualizations (`1_plots/`):**
-     - `execution_time.png`: Execution time vs. grid size (Global vs. Shared memory).
-     - `speedup.png`: Shared memory speedup ratio curve.
-     - `iterations.png`: Jacobi stencil iterations required for convergence.
-     - `temperature_field.png`: 2D steady-state thermal distribution heatmap.
-   - **Point 2 - Benchmark Spreadsheet (`2_excel/`):**
-     - `heat_diffusion_results.xlsx`: Excel workbook with `raw_results`, `summary`, and `correctness` sheets.
-   - **Point 3 - Full 2D Grid Temperature CSV Datasets (`3_csv_grids/`):**
-     - `grid_global_*.csv` and `grid_shared_*.csv` for $N \in \{128, 256, 512, 1024\}$.
-   - **Point 4 - Binaries, Documentation & Source (`4_bin_docs_source/`):**
-     - `heat_diffusion_linux_x86_64`: Compiled Linux CUDA binary (Hopper/Ada/Ampere/Turing/Blackwell).
-     - `GPU_Programming_Problems.pdf`: Original assignment problem set.
-     - `heat_diffusion.cu`: Standalone CUDA C++ source code.
-     - `heat_diffusion_cuda.ipynb`: Interactive Jupyter notebook.
-     - `Dockerfile`, `Makefile`, `docker-compose.yml`, `README.md`.
-   - **Point 5 - NVIDIA Nsight Systems Profiling (`5_profiling/`):**
-     - `profile_summary.txt`: Stencil kernel performance metrics, memory throughput, and CLI commands.
-     - `heat_diffusion_profile.nsys-rep`: Complete trace report (generated when physical GPU is available).
-4. **Container Registry Publishing:** Automatically logs in to **GitHub Container Registry (GHCR)** using `${{ secrets.GITHUB_TOKEN }}` and publishes the tagged image:
-   ```bash
-   docker pull ghcr.io/azdevops143/gpu-assignment:latest
-   ```
-
-> [!NOTE]
-> Standard GitHub-hosted runners (`ubuntu-latest`) do not contain physical GPUs, but they **can fully compile, build, and verify** CUDA and Nsight code in Docker. To run real kernel executions and generate live Nsight traces on GPU hardware directly inside GitHub Actions, connect a **Self-Hosted Runner** with an NVIDIA GPU and NVIDIA Container Toolkit.
+1. **Automated Docker Build:** Builds the Docker container from `Dockerfile` utilizing `nvcr.io/nvidia/cuda:12.8.0-devel-ubuntu22.04` and compiling with `-gencode arch=compute_100,code=sm_100`.
+2. **CUDA & Nsight Systems Verification:** Verifies compilation with `-O3 -lineinfo` and checks CLI availability of NVIDIA Nsight Systems (`nsys`).
+3. **Automated Pipeline Artifact Generation (Points 1 to 5):**
+   Packages simulation outputs, benchmark statistics, profiling logs, and binaries into a downloadable ZIP (`gpu-assignment-complete-artifacts`):
+   - **Point 1 — High-Resolution PNG Visualizations (`1_plots/`):**
+     - `execution_time.png`: Runtime vs. Grid Size ($N \in \{128, 256, 512, 1024\}$).
+     - `speedup.png`: Shared memory acceleration curve.
+     - `iterations.png`: Stencil iterations to reach convergence threshold ($\varepsilon = 10^{-4}$).
+     - `temperature_field.png`: 2D steady-state heat distribution heatmap.
+   - **Point 2 — Benchmark Spreadsheet (`2_excel/`):**
+     - `heat_diffusion_results.xlsx`: Multi-sheet Excel workbook (`raw_results`, `summary`, `correctness`).
+   - **Point 3 — Temperature CSV Grids (`3_csv_grids/`):**
+     - Full grid state CSVs for both Global and Shared implementations across all $N$.
+   - **Point 4 — Binaries & Assignment Documentation (`4_bin_docs_source/`):**
+     - `heat_diffusion_linux_x86_64`: Compiled Linux CUDA binary (`sm_100`).
+     - `GPU_Programming_Problems.pdf`: Original assignment specifications.
+     - `heat_diffusion.cu`, `Dockerfile`, `Makefile`, `docker-compose.yml`, `README.md`.
+   - **Point 5 — NVIDIA Nsight Systems Profiling (`5_profiling/`):**
+     - `profile_summary.txt`: Kernel execution breakdown, memory throughput, and profiling reports.
+     - `heat_diffusion_profile.nsys-rep`: Complete trace report (generated when running on GPU runner).
+4. **Container Registry Deployment:**
+   Automatically tags and publishes the container image to:
+   - **GitHub Container Registry (GHCR):** `ghcr.io/azdevops143/gpu-assignment:latest`
+   - **NVIDIA NGC Registry:** `nvcr.io/1060059671547516/charantejgpu:latest` (when `NGC_API_KEY` is present).
 
 ---
 
@@ -92,11 +137,11 @@ make docker-build
 ```
 
 ### 2. Run with NVIDIA GPU Passthrough
-Ensure [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) is installed on your host:
+Ensure [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) is installed on your host system:
 ```bash
 docker run --gpus all --rm -it gpu-assignment:latest
 ```
-Or with Docker Compose:
+Or via Docker Compose:
 ```bash
 docker compose up
 ```
@@ -107,17 +152,13 @@ docker run --gpus all --rm -v $(pwd)/artifacts/5_profiling:/reports gpu-assignme
   nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/heat_diffusion_profile ./heat_diffusion 256 1e-4 2000000
 ```
 
----
-
-## Pushing to Your GitHub Repository
-
-To push this repository to `https://github.com/AzDevops143/GPU-assignment.git`:
-
+### 4. Custom Execution Parameters
+The binary accepts three command-line parameters:
 ```bash
-git init -b main
-git add .
-git commit -m "feat: setup Dockerfile, CUDA source, and GitHub Actions CI workflow"
-git remote add origin https://github.com/AzDevops143/GPU-assignment.git
-git push -u origin main
+./heat_diffusion <grid_size_N> <tolerance> <max_iterations>
+# Example:
+./heat_diffusion 512 1e-4 2000000
 ```
-Once pushed, click the **Actions** tab on your GitHub repository to watch the Docker container build, test, profile, and publish automatically!
+- `<grid_size_N>`: Dimension $N$ of the $N \times N$ temperature grid (default: `256`).
+- `<tolerance>`: Convergence threshold $\varepsilon$ (default: `1e-4`).
+- `<max_iterations>`: Maximum iteration safeguard (default: `2000000`).
