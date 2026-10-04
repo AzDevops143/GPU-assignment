@@ -70,6 +70,8 @@ jobs:
         run: |
           echo "Checking CUDA binary existence inside container..."
           docker run --rm gpu-assignment-local:latest ls -lh ./JOR ./heat_diffusion
+          echo "Verifying NVIDIA Blackwell sm_100 CUBIN architecture via cuobjdump..."
+          docker run --rm gpu-assignment-local:latest cuobjdump -lelf ./JOR
 
       - name: Verify NVIDIA Nsight Systems CLI inside container
         run: |

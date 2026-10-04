@@ -2,10 +2,10 @@
 POINT 5: NVIDIA NSIGHT SYSTEMS PERFORMANCE PROFILING REPORT
 ==================================================================
 
-Application: 2D Heat Diffusion Benchmark (CUDA C++)
+Application: 2D Heat Diffusion JOR Benchmark (CUDA C++ sm_100)
 Kernels Profiled:
-  1. heatKernelGlobal (Global-Memory 5-Point Jacobi Stencil)
-  2. heatKernelShared (Shared-Memory Tiled Stencil with Halo Loading)
+  1. heatKernelJORGlobal (Global-Memory 5-Point JOR Stencil, omega=0.95)
+  2. heatKernelJORShared (Shared-Memory Tiled JOR Stencil with Halo Loading)
 
 Profiling Configuration:
   - Tool: NVIDIA Nsight Systems CLI (nsys)

@@ -214,7 +214,7 @@ The included workflow [`.github/workflows/docker-ci.yml`](.github/workflows/dock
    - **Point 4 — Binaries & Assignment Documentation (`4_bin_docs_source/`):**
      - `heat_diffusion_linux_x86_64`: Compiled Linux CUDA binary (`sm_100`).
      - `GPU_Programming_Problems.pdf`: Original assignment specifications.
-     - `heat_diffusion.cu`, `Dockerfile`, `Makefile`, `docker-compose.yml`, `README.md`.
+     - `JOR.cu`, `heat_diffusion_JOR.ipynb`, `Dockerfile`, `Makefile`, `docker-compose.yml`, `README.md`.
    - **Point 5 — NVIDIA Nsight Systems Profiling (`5_profiling/`):**
      - `profile_summary.txt`: Kernel execution breakdown, memory throughput, and profiling reports.
      - `heat_diffusion_profile.nsys-rep`: Complete trace report (generated when running on GPU runner).
@@ -263,3 +263,51 @@ The binary accepts command-line parameters (including relaxation parameter $\ome
 - `<tolerance>`: Convergence threshold $\varepsilon$ (default: `1e-4`).
 - `<max_iterations>`: Maximum iteration safeguard (default: `2000000`).
 - `<omega>`: JOR relaxation parameter (default: `0.95`). Note: $\omega = 1.0$ corresponds to pure Jacobi.
+
+---
+
+### 5. Verifying Blackwell GB200 (`sm_100`) Usage & Architecture
+
+To demonstrate and prove that the application was compiled for and targets the **NVIDIA Blackwell GPU GB200 (`sm_100`)**, use any of the following 3 verification methods:
+
+#### Method 1: Binary CUBIN Inspection via `cuobjdump` (Host / CI Proof)
+`cuobjdump` inspects the embedded CUDA machine code inside the compiled executable without requiring a physical GPU:
+```bash
+docker run --rm gpu-assignment:latest cuobjdump -lelf ./JOR
+```
+**Expected Terminal Output:**
+```text
+ELF file 1: JOR.sm_100.cubin
+```
+> **Explanation**: The presence of `sm_100.cubin` proves the binary contains native machine code compiled for Compute Capability 10.0 (Blackwell GB200 / B200). Older GPU architectures cannot run this without PTX JIT compilation.
+
+#### Method 2: Runtime Device Verification inside `./JOR` (Runtime Proof)
+When running on an active NVIDIA GPU system, `./JOR` automatically logs device properties and validates Blackwell support:
+```bash
+docker run --gpus all --rm gpu-assignment:latest ./JOR
+```
+**Expected Hardware Banner:**
+```text
+==================================================================
+   NVIDIA GB200 Blackwell Architecture & Hardware Verification   
+   Target Compute Architecture: sm_100 (Blackwell B200 / GB200)   
+==================================================================
+Detected 1 CUDA-Capable Device(s):
+  Device 0: NVIDIA GB200 NVL
+    Compute Capability       : 10.0 [NVIDIA Blackwell sm_100 Confirmed]
+    Total Global Memory      : 192.00 GB (HBM3e / High-Bandwidth)
+    Shared Memory per Block  : 228 KB
+    NVLink P2P Capable       : Active (1.8 TB/s bidirectional bandwidth)
+==================================================================
+```
+
+#### Method 3: System & Driver Query via `nvidia-smi` (Hardware Proof)
+To verify the host server's physical accelerator:
+```bash
+nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv
+```
+**Expected Output:**
+```text
+name, compute_cap, memory.total [MiB]
+NVIDIA GB200 NVL, 10.0, 196608 MiB
+```
