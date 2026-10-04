@@ -29,7 +29,7 @@ WORKDIR /workspace
 
 COPY JOR.cu /workspace/
 COPY Makefile /workspace/
-COPY ["heat_diffusion_cuda JOR final.ipynb", "heat_diffusion_cuda.ipynb", "/workspace/"]
+COPY ["heat_diffusion_cuda JOR final.ipynb", "/workspace/"]
 
 RUN nvcc -O3 -lineinfo -std=c++17 \
     -gencode arch=compute_100,code=sm_100 \
