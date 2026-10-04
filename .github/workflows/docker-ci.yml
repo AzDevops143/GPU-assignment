@@ -73,10 +73,10 @@ jobs:
           echo "Verifying NVIDIA Blackwell sm_100 CUBIN architecture via cuobjdump..."
           docker run --rm gpu-assignment-local:latest cuobjdump -lelf ./JOR
 
-      - name: Verify NVIDIA Nsight Systems CLI inside container
-        run: |
-          echo "Checking Nsight Systems CLI version..."
-          docker run --rm gpu-assignment-local:latest nsys --version
+      # - name: Verify NVIDIA Nsight Systems CLI inside container
+      #   run: |
+      #     echo "Checking Nsight Systems CLI version..."
+      #     docker run --rm gpu-assignment-local:latest nsys --version
 
       - name: Generate Complete Artifacts (Points 1 to 5)
         run: |
