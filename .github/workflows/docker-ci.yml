@@ -69,7 +69,7 @@ jobs:
       - name: Verify CUDA executable inside container
         run: |
           echo "Checking CUDA binary existence inside container..."
-          docker run --rm gpu-assignment-local:latest ls -lh ./heat_diffusion
+          docker run --rm gpu-assignment-local:latest ls -lh ./JOR ./heat_diffusion
 
       - name: Verify NVIDIA Nsight Systems CLI inside container
         run: |
@@ -82,9 +82,10 @@ jobs:
           python generate_artifacts.py
 
           CONTAINER_ID=$(docker create gpu-assignment-local:latest)
+          docker cp $CONTAINER_ID:/workspace/JOR ./artifacts/4_bin_docs_source/JOR
           docker cp $CONTAINER_ID:/workspace/heat_diffusion ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
           docker rm $CONTAINER_ID
-          chmod +x ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
+          chmod +x ./artifacts/4_bin_docs_source/JOR ./artifacts/4_bin_docs_source/heat_diffusion_linux_x86_64
 
           echo "Checking for NVIDIA GPU device for live Nsight profiling..."
           if command -v nvidia-smi &> /dev/null && nvidia-smi; then
@@ -92,12 +93,12 @@ jobs:
             docker run --gpus all --rm \
               -v $(pwd)/artifacts/5_profiling:/reports \
               gpu-assignment-local:latest \
-              nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/heat_diffusion_profile ./heat_diffusion 256 1e-4 2000000
+              nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/JOR_profile ./JOR 256 1e-4 2000000
             
             docker run --rm \
               -v $(pwd)/artifacts/5_profiling:/reports \
               gpu-assignment-local:latest \
-              nsys stats --report cuda_gpu_kern_sum,cuda_api_sum /reports/heat_diffusion_profile.nsys-rep > ./artifacts/5_profiling/profile_summary.txt
+              nsys stats --report cuda_gpu_kern_sum,cuda_api_sum /reports/JOR_profile.nsys-rep > ./artifacts/5_profiling/profile_summary.txt
           else
             echo "Standard runner without physical GPU detected. Baseline profiling analysis report packaged."
           fi
