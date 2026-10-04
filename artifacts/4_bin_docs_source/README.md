@@ -11,7 +11,7 @@ This project is implemented and compiled **specifically for the NVIDIA GB200 NVL
 The design rationale centers directly on Blackwell's cutting-edge **Dual Memory Architecture**:
 
 <p align="center">
-  <img src="artifacts/gb200_architecture.png" alt="NVIDIA GB200 Architecture Schematic" width="850" />
+  <img src="assets/gb200_architecture.png" alt="NVIDIA GB200 Architecture Schematic" width="850" />
 </p>
 
 *Figure: NVIDIA GB200 Architecture Schematic — Grace CPU (72 Arm cores, up to ~480 GB LPDDR5X at ~512 GB/s) connected via NVLink-C2C (900 GB/s total, ~450 GB/s each way CPU-to-GPU link) to dual B200 GPUs (SMs + L2) with high-bandwidth HBM3e (192 GB, ~8 TB/s each).*
