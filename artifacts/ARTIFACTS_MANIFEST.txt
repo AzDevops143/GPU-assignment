@@ -21,7 +21,7 @@ GPU ASSIGNMENT COMPLETE ARTIFACTS MANIFEST (POINTS 1 TO 5)
   - JOR (heat_diffusion_linux_x86_64): Compiled CUDA JOR binary (GB200 Blackwell sm_100)
   - GPU_Programming_Problems.pdf: Official problem set
   - JOR.cu                     : Standalone CUDA C++ source code (Jacobi Over-Relaxation)
-  - heat_diffusion_cuda JOR final.ipynb : Interactive JOR Jupyter notebook
+  - heat_diffusion_JOR.ipynb   : Interactive JOR Jupyter notebook
   - Dockerfile, Makefile, docker-compose.yml, README.md
 
 5_PROFILING/ (Point 5 - NVIDIA Nsight Systems Profiling):

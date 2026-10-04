@@ -155,7 +155,7 @@ def main():
         ("Dockerfile", bin_docs_dir),
         ("Makefile", bin_docs_dir),
         ("docker-compose.yml", bin_docs_dir),
-        ("heat_diffusion_cuda JOR final.ipynb", bin_docs_dir),
+        ("heat_diffusion_JOR.ipynb", bin_docs_dir),
         ("README.md", bin_docs_dir),
     ]
     for src_file, dst_folder in files_to_copy:

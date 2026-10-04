@@ -90,7 +90,7 @@ GPU-assignment/
 ├── docker-compose.yml                 # Multi-container orchestration & GPU passthrough
 ├── Makefile                           # Local build & execution targets
 ├── JOR.cu                             # CUDA source (Global vs Shared memory JOR)
-├── heat_diffusion_cuda JOR final.ipynb # Interactive JOR analysis notebook
+├── heat_diffusion_JOR.ipynb          # Interactive JOR analysis notebook
 ├── generate_artifacts.py              # Automated artifact generation pipeline
 ├── GPU_Programming_Problems.pdf       # Assignment problem specification
 ├── .gitignore
