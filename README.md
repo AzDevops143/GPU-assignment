@@ -1,4 +1,4 @@
-# GPU-assignment: 2D Heat Diffusion on NVIDIA GB200 Blackwell (`sm_100`)
+# Dr.Binod Kumar Sir GPU-assignment: 2D Heat Diffusion on NVIDIA GB200 Blackwell (`sm_100`)
 
 Containerized CUDA Jacobi Stencil Application with **Dual Memory Optimization** and Automated CI/CD Pipeline via **Docker** and **GitHub Actions**.
 
