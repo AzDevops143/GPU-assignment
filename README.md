@@ -67,7 +67,7 @@ In the NVIDIA GB200 Grace Blackwell architecture, dual Blackwell GPUs communicat
 ### 5. Dedicated Target Architecture: `sm_100`
 Compilation in both the container and CI pipeline targets Compute Capability **`sm_100`** natively:
 ```bash
-nvcc -O3 -lineinfo -std=c++17 -gencode arch=compute_100,code=sm_100 heat_diffusion.cu -o heat_diffusion
+nvcc -O3 -lineinfo -std=c++17 -gencode arch=compute_100,code=sm_100 JOR.cu -o JOR
 ```
 
 ---
@@ -89,8 +89,8 @@ GPU-assignment/
 ├── Dockerfile                         # NVIDIA CUDA 12.8 devel image targeting sm_100
 ├── docker-compose.yml                 # Multi-container orchestration & GPU passthrough
 ├── Makefile                           # Local build & execution targets
-├── heat_diffusion.cu                  # CUDA source (Global vs Shared memory Jacobi)
-├── heat_diffusion_cuda.ipynb          # Interactive Jupyter analysis notebook
+├── JOR.cu                             # CUDA source (Global vs Shared memory JOR)
+├── heat_diffusion_cuda JOR final.ipynb # Interactive JOR analysis notebook
 ├── generate_artifacts.py              # Automated artifact generation pipeline
 ├── GPU_Programming_Problems.pdf       # Assignment problem specification
 ├── .gitignore
@@ -99,10 +99,11 @@ GPU-assignment/
 
 ---
 
-## Implementation Comparison: Global vs. Shared Memory
+## Implementation Comparison: JOR Global vs. Shared Memory
 
-| Metric / Feature | Global Memory Kernel (`heatKernelGlobal`) | Shared Memory Kernel (`heatKernelShared`) |
+| Metric / Feature | JOR Global Memory Kernel (`heatKernelJORGlobal`) | JOR Shared Memory Kernel (`heatKernelJORShared`) |
 | :--- | :--- | :--- |
+| **Numerical Method** | Jacobi Over-Relaxation (JOR, $\omega = 0.95$) | Jacobi Over-Relaxation (JOR, $\omega = 0.95$) |
 | **Primary Memory Tier** | Blackwell HBM3e Global Memory | On-Chip Shared Memory / L1 Cache |
 | **Stencil Neighborhood Access** | 4 Global Memory reads per interior point | Fast On-Chip Shared Memory reads after halo load |
 | **Memory Redundancy** | High (neighboring threads re-read same points) | Minimal (cooperative loading of $18 \times 18$ tile with halos) |
@@ -248,16 +249,17 @@ docker compose up
 ### 3. Profile with NVIDIA Nsight Systems
 ```bash
 docker run --gpus all --rm -v $(pwd)/artifacts/5_profiling:/reports gpu-assignment:latest \
-  nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/heat_diffusion_profile ./heat_diffusion 256 1e-4 2000000
+  nsys profile -t cuda,osrt,nvtx --stats=true -o /reports/JOR_profile ./JOR 256 1e-4 2000000
 ```
 
 ### 4. Custom Execution Parameters
-The binary accepts three command-line parameters:
+The binary accepts command-line parameters (including relaxation parameter $\omega$):
 ```bash
-./heat_diffusion <grid_size_N> <tolerance> <max_iterations>
+./JOR <grid_size_N> <tolerance> <max_iterations> <topT> <bottomT> <leftT> <rightT> <initTemp> <omega>
 # Example:
-./heat_diffusion 512 1e-4 2000000
+./JOR 512 1e-4 2000000 100 0 75 50 0 0.95
 ```
 - `<grid_size_N>`: Dimension $N$ of the $N \times N$ temperature grid (default: `256`).
 - `<tolerance>`: Convergence threshold $\varepsilon$ (default: `1e-4`).
 - `<max_iterations>`: Maximum iteration safeguard (default: `2000000`).
+- `<omega>`: JOR relaxation parameter (default: `0.95`). Note: $\omega = 1.0$ corresponds to pure Jacobi.

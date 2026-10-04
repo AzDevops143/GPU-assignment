@@ -27,18 +27,13 @@ RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
 
 WORKDIR /workspace
 
-COPY heat_diffusion.cu /workspace/
-COPY heat_diffusion_cuda.ipynb /workspace/
+COPY JOR.cu /workspace/
 COPY Makefile /workspace/
+COPY "heat_diffusion_cuda JOR final.ipynb" /workspace/
 
 RUN nvcc -O3 -lineinfo -std=c++17 \
-   # -gencode arch=compute_75,code=sm_75 \
-   # -gencode arch=compute_80,code=sm_80 \
-   # -gencode arch=compute_86,code=sm_86 \
-   # -gencode arch=compute_89,code=sm_89 \
-    #-gencode arch=compute_90,code=sm_90 \
     -gencode arch=compute_100,code=sm_100 \
-    #-gencode arch=compute_120,code=sm_120 \
-    heat_diffusion.cu -o heat_diffusion
+    JOR.cu -o JOR && \
+    ln -sf JOR heat_diffusion
 
-CMD ["./heat_diffusion", "256", "1e-4", "2000000"]
+CMD ["./JOR", "256", "1e-4", "2000000"]

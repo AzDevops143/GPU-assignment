@@ -20,7 +20,40 @@
 
 __device__ float g_maxdiff;
 
-__global__ void heatKernelGlobal(const float* T, float* Tnew, int N)
+// Probes for multi-GPU topology and activates direct NVLink P2P access (e.g. GB200 dual Blackwell GPUs)
+void probeAndEnableNvlinkPeerAccess()
+{
+    int deviceCount = 0;
+    cudaError_t err = cudaGetDeviceCount(&deviceCount);
+    if (err != cudaSuccess || deviceCount <= 1) {
+        return; // Single GPU or CPU-only runner
+    }
+
+    printf("==================================================================\n");
+    printf("Multi-GPU System Detected (%d Devices). Querying NVLink P2P Access...\n", deviceCount);
+    for (int i = 0; i < deviceCount; i++) {
+        for (int j = 0; j < deviceCount; j++) {
+            if (i != j) {
+                int canAccess = 0;
+                cudaDeviceCanAccessPeer(&canAccess, i, j);
+                if (canAccess) {
+                    cudaSetDevice(i);
+                    cudaError_t pErr = cudaDeviceEnablePeerAccess(j, 0);
+                    if (pErr == cudaSuccess || pErr == cudaErrorPeerAccessAlreadyEnabled) {
+                        printf("  [NVLink P2P Enabled] GPU %d <-> GPU %d direct access active\n", i, j);
+                    }
+                } else {
+                    printf("  [P2P Unavailable] GPU %d cannot access GPU %d directly\n", i, j);
+                }
+            }
+        }
+    }
+    cudaSetDevice(0);
+    printf("==================================================================\n\n");
+}
+
+// JOR (Jacobi Over-Relaxation) Global Memory Kernel
+__global__ void heatKernelJORGlobal(const float* __restrict__ T, float* __restrict__ Tnew, int N, float omega)
 {
     extern __shared__ float sdata[];
     int col = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -28,13 +61,19 @@ __global__ void heatKernelGlobal(const float* T, float* Tnew, int N)
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
     float diff = 0.0f;
-    if (row <= N - 2 && col <= N - 2) {
+    if (row < N - 1 && col < N - 1) {
         int idx = row * N + col;
         float up    = T[idx - N];
         float down  = T[idx + N];
         float left  = T[idx - 1];
         float right = T[idx + 1];
-        float newval = 0.25f * (up + down + left + right);
+
+        // 5-point Jacobi predictor
+        float jacobi = 0.25f * (up + down + left + right);
+
+        // Jacobi Over-Relaxation (JOR) update with relaxation parameter omega
+        float newval = (1.0f - omega) * T[idx] + omega * jacobi;
+
         diff = fabsf(newval - T[idx]);
         Tnew[idx] = newval;
     }
@@ -42,15 +81,18 @@ __global__ void heatKernelGlobal(const float* T, float* Tnew, int N)
     sdata[tid] = diff;
     __syncthreads();
 
+    // In-kernel parallel reduction for block maximum difference
     for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
         if (tid < s) sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
         __syncthreads();
     }
 
+    // Atomic update to global maximum difference
     if (tid == 0) atomicMax((int*)&g_maxdiff, __float_as_int(sdata[0]));
 }
 
-__global__ void heatKernelShared(const float* T, float* Tnew, int N)
+// JOR (Jacobi Over-Relaxation) Shared Memory Tiled Kernel
+__global__ void heatKernelJORShared(const float* __restrict__ T, float* __restrict__ Tnew, int N, float omega)
 {
     extern __shared__ float smemAll[];
     int tileDim = blockDim.x + 2;
@@ -65,38 +107,41 @@ __global__ void heatKernelShared(const float* T, float* Tnew, int N)
     int colc = min(col, N - 1);
     int rowc = min(row, N - 1);
 
+    // Load central interior element
     tile[ly * tileDim + lx] = T[rowc * N + colc];
 
+    // Cooperative halo loading
     if (threadIdx.x == 0) {
-        int leftCol = max(col - 1, 0);
-        tile[ly * tileDim + 0] = T[rowc * N + leftCol];
+        tile[ly * tileDim + 0] = T[rowc * N + max(col - 1, 0)];
     }
     if (threadIdx.x == blockDim.x - 1) {
-        int rightCol = min(col + 1, N - 1);
-        tile[ly * tileDim + (lx + 1)] = T[rowc * N + rightCol];
+        tile[ly * tileDim + (lx + 1)] = T[rowc * N + min(col + 1, N - 1)];
     }
     if (threadIdx.y == 0) {
-        int upRow = max(row - 1, 0);
-        tile[0 * tileDim + lx] = T[upRow * N + colc];
+        tile[0 * tileDim + lx] = T[max(row - 1, 0) * N + colc];
     }
     if (threadIdx.y == blockDim.y - 1) {
-        int downRow = min(row + 1, N - 1);
-        tile[(ly + 1) * tileDim + lx] = T[downRow * N + colc];
+        tile[(ly + 1) * tileDim + lx] = T[min(row + 1, N - 1) * N + colc];
     }
 
     __syncthreads();
 
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
     float diff = 0.0f;
-    bool valid = (row <= N - 2 && col <= N - 2);
 
-    if (valid) {
+    if (row < N - 1 && col < N - 1) {
         float up    = tile[(ly - 1) * tileDim + lx];
         float down  = tile[(ly + 1) * tileDim + lx];
         float left  = tile[ly * tileDim + (lx - 1)];
         float right = tile[ly * tileDim + (lx + 1)];
-        float newval = 0.25f * (up + down + left + right);
+
+        // 5-point Jacobi predictor using fast shared memory
+        float jacobi = 0.25f * (up + down + left + right);
+
+        // Jacobi Over-Relaxation (JOR) update
         int idx = row * N + col;
+        float newval = (1.0f - omega) * T[idx] + omega * jacobi;
+
         diff = fabsf(newval - T[idx]);
         Tnew[idx] = newval;
     }
@@ -104,6 +149,7 @@ __global__ void heatKernelShared(const float* T, float* Tnew, int N)
     sdata[tid] = diff;
     __syncthreads();
 
+    // In-kernel parallel reduction
     for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
         if (tid < s) sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
         __syncthreads();
@@ -133,7 +179,7 @@ void initGrid(std::vector<float>& g, int N, float topT, float bottomT, float lef
     }
 }
 
-SimResult runSimulation(int N, float tol, long long maxIter, int mode,
+SimResult runSimulation(int N, float tol, long long maxIter, bool useSharedMemory, float omega,
                          float topT, float bottomT, float leftT, float rightT, float initTemp,
                          bool dump, const char* fname)
 {
@@ -171,10 +217,10 @@ SimResult runSimulation(int N, float tol, long long maxIter, int mode,
     while (diffVal > tol && iter < maxIter) {
         CUDA_CHECK(cudaMemcpyToSymbol(g_maxdiff, &zero, sizeof(float)));
 
-        if (mode == GLOBAL_MODE) {
-            heatKernelGlobal<<<grid, block, sharedBytesGlobal>>>(dA, dB, N);
+        if (useSharedMemory) {
+            heatKernelJORShared<<<grid, block, sharedBytesShared>>>(dA, dB, N, omega);
         } else {
-            heatKernelShared<<<grid, block, sharedBytesShared>>>(dA, dB, N);
+            heatKernelJORGlobal<<<grid, block, sharedBytesGlobal>>>(dA, dB, N, omega);
         }
         CUDA_CHECK(cudaGetLastError());
 
@@ -224,9 +270,12 @@ SimResult runSimulation(int N, float tol, long long maxIter, int mode,
 
 int main(int argc, char** argv)
 {
+    probeAndEnableNvlinkPeerAccess();
+
     int N = 256;
     float eps = 1e-4f;
     long long maxIter = 2000000;
+    float omega = 0.95f; // JOR relaxation factor
     float topT = 100.0f;
     float bottomT = 0.0f;
     float leftT = 75.0f;
@@ -241,6 +290,7 @@ int main(int argc, char** argv)
     if (argc > 6) leftT = (float)atof(argv[6]);
     if (argc > 7) rightT = (float)atof(argv[7]);
     if (argc > 8) initTemp = (float)atof(argv[8]);
+    if (argc > 9) omega = (float)atof(argv[9]);
 
     if (N < 3) {
         fprintf(stderr, "N must be at least 3\n");
@@ -249,20 +299,20 @@ int main(int argc, char** argv)
 
     char fnameGlobal[256];
     char fnameShared[256];
-    snprintf(fnameGlobal, sizeof(fnameGlobal), "grid_global_%d.csv", N);
-    snprintf(fnameShared, sizeof(fnameShared), "grid_shared_%d.csv", N);
+    snprintf(fnameGlobal, sizeof(fnameGlobal), "grid_jor_global_%d.csv", N);
+    snprintf(fnameShared, sizeof(fnameShared), "grid_jor_shared_%d.csv", N);
 
-    SimResult rG = runSimulation(N, eps, maxIter, GLOBAL_MODE, topT, bottomT, leftT, rightT, initTemp, true, fnameGlobal);
-    SimResult rS = runSimulation(N, eps, maxIter, SHARED_MODE, topT, bottomT, leftT, rightT, initTemp, true, fnameShared);
+    SimResult rGlobal = runSimulation(N, eps, maxIter, false, omega, topT, bottomT, leftT, rightT, initTemp, true, fnameGlobal);
+    SimResult rShared = runSimulation(N, eps, maxIter, true, omega, topT, bottomT, leftT, rightT, initTemp, true, fnameShared);
 
     printf("RESULT_CSV\n");
     printf("N,mode,iterations,time_ms,converged,final_max_diff\n");
-    printf("%d,global,%lld,%f,%d,%e\n", N, rG.iterations, rG.time_ms, rG.converged ? 1 : 0, rG.final_max_diff);
-    printf("%d,shared,%lld,%f,%d,%e\n", N, rS.iterations, rS.time_ms, rS.converged ? 1 : 0, rS.final_max_diff);
+    printf("%d,jor_global,%lld,%f,%d,%e\n", N, rGlobal.iterations, rGlobal.time_ms, rGlobal.converged ? 1 : 0, rGlobal.final_max_diff);
+    printf("%d,jor_shared,%lld,%f,%d,%e\n", N, rShared.iterations, rShared.time_ms, rShared.converged ? 1 : 0, rShared.final_max_diff);
 
     float maxDiff = 0.0f;
-    for (size_t i = 0; i < rG.grid.size(); i++) {
-        float d = fabsf(rG.grid[i] - rS.grid[i]);
+    for (size_t i = 0; i < rGlobal.grid.size(); i++) {
+        float d = fabsf(rGlobal.grid[i] - rShared.grid[i]);
         if (d > maxDiff) maxDiff = d;
     }
 
