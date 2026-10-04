@@ -10,25 +10,14 @@ This project is implemented and compiled **specifically for the NVIDIA GB200 NVL
 
 The design rationale centers directly on Blackwell's cutting-edge **Dual Memory Architecture**:
 
-```
-+---------------------------------------------------------------------------------+
-|                   NVIDIA GB200 NVL Grace Blackwell Superchip                    |
-|                                                                                 |
-|   +-----------------------+     NVLink-C2C      +---------------------------+   |
-|   |    Grace CPU Core     | <=================> |   Blackwell GPU (sm_100)  |   |
-|   | (LPDDR5X Memory Tier) |      900 GB/s       |     (HBM3e Memory Tier)   |   |
-|   +-----------------------+   Coherent Memory   +-------------+-------------+   |
-|                                                               |                 |
-|                                                  On-Chip Memory Hierarchy       |
-|                                                  +------------+-------------+   |
-|                                                  |   Shared Memory / L1     |   |
-|                                                  | (Tiled Stencil + Halos)  |   |
-|                                                  +--------------------------+   |
-+---------------------------------------------------------------------------------+
-```
+<p align="center">
+  <img src="artifacts/gb200_architecture.png" alt="NVIDIA GB200 Architecture Schematic" width="850" />
+</p>
+
+*Figure: NVIDIA GB200 Architecture Schematic — Grace CPU (72 Arm cores, up to ~480 GB LPDDR5X at ~512 GB/s) connected via NVLink-C2C (900 GB/s total, ~450 GB/s each way CPU-to-GPU link) to dual B200 GPUs (SMs + L2) with high-bandwidth HBM3e (192 GB, ~8 TB/s each).*
 
 ### 1. Grace-Blackwell Coherent Dual Memory Subsystem
-The NVIDIA GB200 integrates the NVIDIA Grace CPU (LPDDR5X) and Blackwell GPU (HBM3e) through an ultra-low-latency **NVLink-C2C (Chip-to-Chip)** link offering **900 GB/s bidirectional coherent bandwidth**. This establishes a unified physical memory address space where CPU and GPU operate coherently, allowing large-scale stencil simulations to scale without standard PCIe bus bottlenecks.
+The NVIDIA GB200 Superchip integrates the **NVIDIA Grace CPU (72 Arm Neoverse cores with up to ~480 GB LPDDR5X memory at ~512 GB/s)** and **dual Blackwell B200 GPUs (each with 192 GB HBM3e at ~8 TB/s)** interconnected through an ultra-low-latency **NVLink-C2C (Chip-to-Chip)** link offering **900 GB/s total coherent bidirectional bandwidth (~450 GB/s each way)**. This establishes a unified physical memory address space where CPU and GPU operate coherently, allowing large-scale stencil simulations to scale without standard PCIe bus bottlenecks.
 
 ### 2. Dual Memory Hierarchy in 2D Jacobi Stencil Computations
 PDE solving (2D Heat Diffusion Jacobi iteration) is fundamentally **memory-bandwidth bound**. This repository explicitly exploits and contrasts the two primary device memory tiers on the GB200 Blackwell:
