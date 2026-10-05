@@ -124,12 +124,12 @@ jobs:
           docker tag gpu-assignment-local:latest $IMAGE_TAG
           docker push $IMAGE_TAG
 
-      # - name: Push Docker image to NVIDIA NGC Registry
-      #   env:
-      #     NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
-      #   if: github.event_name != 'pull_request' && env.NGC_API_KEY != ''
-      #   run: |
-      #     NGC_TAG="${{ env.NGC_REGISTRY }}/${{ env.NGC_ORG }}/${{ env.NGC_IMAGE_NAME }}:latest"
-      #     echo "Tagging and pushing image to ${NGC_TAG}..."
-      #     docker tag gpu-assignment-local:latest $NGC_TAG
-      #     docker push $NGC_TAG
+      - name: Push Docker image to NVIDIA NGC Registry
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+        if: github.event_name != 'pull_request' && env.NGC_API_KEY != ''
+        run: |
+          NGC_TAG="${{ env.NGC_REGISTRY }}/${{ env.NGC_ORG }}/${{ env.NGC_IMAGE_NAME }}:latest"
+          echo "Tagging and pushing image to ${NGC_TAG}..."
+          docker tag gpu-assignment-local:latest $NGC_TAG
+          docker push $NGC_TAG
